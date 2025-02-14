@@ -10,9 +10,11 @@ import torch.nn.init as init
 from multiomics.code.contrastive_loss import InstanceLoss
 from multiomics.code import util
 import argparse
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
-
 
 
 ADJ_PARAMETER = 10
@@ -285,8 +287,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "LapDirVae"
-    disease = 'coad'
-    num_clust = 4 #5
+    disease = 'lihc'
+    num_clust = 2 #5
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -362,35 +364,102 @@ def main(args):
 
     if disease == 'coad':
         truth = label.flatten().astype('int')
+    elif disease == 'lihc':
+        lst = label[:, 0].flatten()
+        unique_vals = list(set(lst))  # Find unique values
+        mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
+        truth_stage = [mapping[val] for val in lst]
+        truth_class = label[:, 1].flatten().astype('int')
     else:
         truth = label.flatten()
-    util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-    # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-    util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
-    util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
-    util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
-    km = KMeans(n_clusters=num_clust, random_state=42)
-    y_pred = km.fit_predict(final_embedding)
-    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
-    print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                           'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+    if disease == 'lihc':
+        util.plot_with_path(data, truth_class, desired_path + "/data", method)
+        util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_class, desired_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_class, desired_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_class, desired_path + "/_miRNA_em", method)
+        best_inertia = float("inf")
+        best_labels = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                best_labels = labels
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth_class, best_labels)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
-    from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth_class, test_size=0.25,
+                                                            random_state=12)
 
-    X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
 
-    knn = KNeighborsClassifier(n_neighbors=num_clust)
+        # Train the model
+        knn.fit(X_train, y_train)
 
-    # Train the model
-    knn.fit(X_train, y_train)
+        # Predict on test set
+        y_pred = knn.predict(X_test)
 
-    # Predict on test set
-    y_pred = knn.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
 
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"kNN acc: {accuracy:.2f}")
+        util.plot_with_path(data, truth_stage, desired_path + "/data", method)
+        util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_miRNA_em", method)
+        best_inertia = float("inf")
+        best_labels = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                best_labels = labels
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(np.asarray(truth_stage), best_labels)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, np.asarray(truth_stage), test_size=0.25,
+                                                            random_state=12)
+
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
+
+        # Train the model
+        knn.fit(X_train, y_train)
+
+        # Predict on test set
+        y_pred = knn.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
+    else:
+        util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
+        km = KMeans(n_clusters=num_clust, random_state=42)
+        y_pred = km.fit_predict(final_embedding)
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
+
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
+
+        # Train the model
+        knn.fit(X_train, y_train)
+
+        # Predict on test set
+        y_pred = knn.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
 
 
 if __name__ == "__main__":

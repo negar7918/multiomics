@@ -27,10 +27,10 @@ def work(p):
     loss_best = np.inf
     model_path = ''
     early_stopper = EarlyStopper(patience=30, min_delta=10)
-    n_clusters = 4
+    n_clusters = 2
     temperature = 0.4
     method = "gamma_dirvae"
-    disease = 'coad'
+    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 

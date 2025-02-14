@@ -30,7 +30,7 @@ def work(p):
     early_stopper = EarlyStopper(patience=30, min_delta=10)
     temperature = 0.4
     method = "prod_gamma_dirvae"
-    disease = 'coad'
+    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 

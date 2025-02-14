@@ -75,16 +75,16 @@ def load_data(disease):
         label[label == 'LUAD'] = 3
         label[label == 'LUSC'] = 4
     elif disease == 'kirc':
-        view1_data = pd.read_csv('../../dataset/KIRC/data/gene1.csv')
+        view1_data = pd.read_csv('../../data/KIRC/data/gene1.csv')
         view1_data = view1_data.T # mRNA
         view1_data = view1_data.iloc[1:, 1:]
-        view2_data = pd.read_csv('../../dataset/KIRC/data/methyl.csv', header=None)
+        view2_data = pd.read_csv('../../data/KIRC/data/methyl.csv', header=None)
         view2_data = view2_data.T # DNAmeth
         view2_data = view2_data.iloc[1:, 1:]
-        view3_data = pd.read_csv('../../dataset/KIRC/data/miRNA1.csv', header=None)
+        view3_data = pd.read_csv('../../data/KIRC/data/miRNA1.csv', header=None)
         view3_data = view3_data.T # miRNA
         view3_data = view3_data.iloc[1:, 1:]
-        label = pd.read_csv('../../dataset/KIRC/label.csv', header=None)
+        label = pd.read_csv('../../data/KIRC/label.csv', header=None)
         label = label.to_numpy()[1:, 1:]
     elif disease == 'kidney':
         kirp_mrna = pd.read_csv('../../dataset/kidney/KIRP_mRNA.csv')

@@ -11,6 +11,9 @@ from torch import polygamma, lgamma
 from sklearn.cluster import KMeans
 import multiomics.code.evaluation as evaluation
 import argparse
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -269,9 +272,9 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "ProdGamDirVae"
-    disease = 'coad'
+    disease = 'lihc'
     USE_GPU = False
-    num_clust = 4 # 5
+    num_clust = 2 # 5
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -327,47 +330,113 @@ def main(args):
 
     if disease == 'coad':
         truth = label.flatten().astype('int')
+    elif disease == 'lihc':
+        lst = label[:,0].flatten()
+        unique_vals = list(set(lst))  # Find unique values
+        mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
+        truth_stage = [mapping[val] for val in lst]
+        truth_class = label[:,1].flatten().astype('int')
     else:
         truth = label.flatten()
-    util.plot_with_path(data, truth, desired_path + "/data", method)
-    util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
-    #util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-    util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, desired_path + "/_mRNA_em", method)
-    util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, desired_path + "/_DNAMeth_em", method)
-    util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, desired_path + "/_miRNA_em", method)
-    best_inertia = float("inf")
-    best_labels = None
-    for i in range(30):
-        kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-        labels = kmeans.fit_predict(final_embedding)
-        if kmeans.inertia_ < best_inertia:
-            best_inertia = kmeans.inertia_
-            best_labels = labels
-    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, best_labels)
-    print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                           'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
-    util.plot_sim(data, desired_path+ "/raw_data_sim.png", "Raw Data")
-    util.plot_sim(final_embedding, desired_path+ "/em_sim.png", "Embedding")
+    if disease == 'lihc':
+        util.plot_with_path(data, truth_class, desired_path + "/data", method)
+        util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_class, desired_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_class, desired_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_class, desired_path + "/_miRNA_em", method)
+        best_inertia = float("inf")
+        best_labels = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                best_labels = labels
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth_class, best_labels)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
-    # for brca: util.plot_umap_seq(view1_specific_em_new.detach().numpy(), data, label, desired_path, "/samples60to90.png", method)
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth_class, test_size=0.25, random_state=12)
 
-    from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
 
-    X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
+        # Train the model
+        knn.fit(X_train, y_train)
 
-    knn = KNeighborsClassifier(n_neighbors=num_clust)
+        # Predict on test set
+        y_pred = knn.predict(X_test)
 
-    # Train the model
-    knn.fit(X_train, y_train)
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
 
-    # Predict on test set
-    y_pred = knn.predict(X_test)
+        util.plot_with_path(data, truth_stage, desired_path + "/data", method)
+        util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_miRNA_em", method)
+        best_inertia = float("inf")
+        best_labels = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                best_labels = labels
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(np.asarray(truth_stage), best_labels)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"kNN acc: {accuracy:.2f}")
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, np.asarray(truth_stage), test_size=0.25, random_state=12)
+
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
+
+        # Train the model
+        knn.fit(X_train, y_train)
+
+        # Predict on test set
+        y_pred = knn.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
+    else:
+        util.plot_with_path(data, truth, desired_path + "/data", method)
+        util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
+        #util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, desired_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, desired_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, desired_path + "/_miRNA_em", method)
+        best_inertia = float("inf")
+        best_labels = None
+        for i in range(30):
+            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
+            labels = kmeans.fit_predict(final_embedding)
+            if kmeans.inertia_ < best_inertia:
+                best_inertia = kmeans.inertia_
+                best_labels = labels
+        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, best_labels)
+        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+
+        util.plot_sim(data, desired_path+ "/raw_data_sim.png", "Raw Data")
+        util.plot_sim(final_embedding, desired_path+ "/em_sim.png", "Embedding")
+
+        # for brca: util.plot_umap_seq(view1_specific_em_new.detach().numpy(), data, label, desired_path, "/samples60to90.png", method)
+
+        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
+
+        knn = KNeighborsClassifier(n_neighbors=num_clust)
+
+        # Train the model
+        knn.fit(X_train, y_train)
+
+        # Predict on test set
+        y_pred = knn.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"kNN acc: {accuracy:.2f}")
 
     # sim_data = []
     # sim_em = []

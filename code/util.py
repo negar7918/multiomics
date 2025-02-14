@@ -142,8 +142,11 @@ def plot_with_path(data, label, path, method):
     if 'brca' in path:
         for t, l in zip(g1.legend_.texts, ["Normal-like", "Basal-like", "HER2-enriched", "Luminal A", "Luminal B"]):
             t.set_text(l)
-    else:
+    elif 'coad' in path:
         for t, l in zip(g1.legend_.texts, ["type I", "type II", "type III", "type IV"]):
+            t.set_text(l)
+    elif 'lihc' in path:
+        for t, l in zip(g1.legend_.texts, ["type I", "type II"]):
             t.set_text(l)
     plt.title("t-SNE on "+method, fontsize=20)
     plt.savefig(path+'_tsne.png')
@@ -165,8 +168,11 @@ def plot_with_path(data, label, path, method):
     if 'brca' in path:
         for t, l in zip(g2.legend_.texts, ["Normal-like", "Basal-like", "HER2-enriched", "Luminal A", "Luminal B"]):
             t.set_text(l)
-    else:
+    elif 'coad' in path:
         for t, l in zip(g2.legend_.texts, ["type I", "type II", "type III", "type IV"]):
+            t.set_text(l)
+    elif 'lihc' in path:
+        for t, l in zip(g2.legend_.texts, ["type I", "type II"]):
             t.set_text(l)
 
     plt.title("UMAP on "+method, fontsize=20)
