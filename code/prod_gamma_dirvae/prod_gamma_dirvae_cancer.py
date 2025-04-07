@@ -1,6 +1,6 @@
 import numpy as np
 from multiomics.code.loading_data import load_data
-import prodDirVae
+from multiomics.code.prod_gamma_dirvae import prodDirVae
 from torch import nn
 import torch.nn.functional as F
 import torch.optim
