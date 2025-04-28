@@ -79,10 +79,11 @@ class SharedAndSpecificLoss(nn.Module):
         temperature, batch_size) = params
 
         # orthogonal restrict
+        orthogonal_loss_all = 0.
         #orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
         #orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
         #orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
-        #orthogonal_loss_all = orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
+        #orthogonal_loss_all += orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
 
         # Contrastive Loss
         contrastive_loss1 = self.contrastive_loss(shared1_mlp, shared2_mlp, temperature, batch_size)
@@ -108,7 +109,7 @@ class SharedAndSpecificLoss(nn.Module):
         KL += compute_kl_gamma(prior_alpha, specific2_alpha)
         KL += compute_kl_gamma(prior_alpha, specific3_alpha)
 
-        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL
+        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL + orthogonal_loss_all
 
         return loss_total
 
@@ -282,7 +283,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
+    path = ('../../results/models_'+disease+'_GammaDirVae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:

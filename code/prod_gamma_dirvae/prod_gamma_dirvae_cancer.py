@@ -80,10 +80,11 @@ class SharedAndSpecificLoss(nn.Module):
         temperature, batch_size) = params
 
         # orthogonal restrict
-        orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
-        orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
-        orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
-        orthogonal_loss_all = orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
+        orthogonal_loss_all = 0.
+        #orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
+        #orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
+        #orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
+        #orthogonal_loss_all += orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
 
         # Contrastive Loss
         contrastive_loss1 = self.contrastive_loss(shared1_mlp, shared2_mlp, temperature, batch_size)
@@ -279,9 +280,9 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "ProdGamDirVae"
-    disease = 'brca'
+    disease = 'lihc'
     USE_GPU = False
-    num_clust = 5
+    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease]
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -304,10 +305,10 @@ def main(args):
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
     s = int(folder[-1]) # the number of groups
     model = SharedAndSpecificEmbedding(
-            method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
-            n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
-            n_units_3=[256, 128, 64, 8], mlp_size=[32,8])
-
+        method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+        n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
+        n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
+    )
     if USE_GPU:
         model = model.cuda()
     model.load_state_dict(torch.load(desired_path + '/model_{}'.format(disease)))

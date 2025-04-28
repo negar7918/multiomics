@@ -259,8 +259,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "LapDirVae"
-    disease = 'brca'
-    num_clust = 5 #5
+    disease = 'lihc'
+    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease] #5
 
     view1_data, view2_data, view_train_concatenate, y_true = load_data(disease)
 

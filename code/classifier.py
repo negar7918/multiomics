@@ -18,9 +18,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
-from torchmetrics import ConfusionMatrix
-from shap import KernelExplainer, sample
-from shap.plots import waterfall
 from vae.mocss_vae import SharedAndSpecificEmbedding as SASEvae
 from ae.mocss_original_refactored import SharedAndSpecificEmbedding as SASEae
 from prod_gamma_dirvae.prod_gamma_dirvae_cancer import SharedAndSpecificEmbedding as SASEpgdv
@@ -32,171 +29,247 @@ import matplotlib.pyplot as plt
 #from neurhci.hierarchical import HCI2layers
 #from neurhci.marginal_utilities import MonotonicSelector, MarginalUtilitiesLayer, IdentityClipped, Identity
 import xgboost
+import os
 #%%
 device = 'cpu'
-name_model = 'lapdirvae'
-omics_shape = [1000,1000,503]
-model_sas = {'vae': SASEvae(
-                view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
-                n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
-                n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
-            ), 
-            'ae':SASEae(
-                view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
-                n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
-                n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
-            ), 
-            'ProdGammaDirVae':SASEpgdv(
-                "ProdGamDirVae", 4, view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
-                n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
-                n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
-            ), 
-            'GammaDirVae':SASEgdv(
-                view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
-                n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
-                n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
-            ), 
-            'lapdirvae': SASElap(view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
-                n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
-                n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
-            )
-            }[name_model]
-params = {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'}
-nb_classes = 5
+disease = 'lihc'
 
-model_embedding = model_sas.to(device)
-path = '../results/models_brca_' + name_model + '/' + params[name_model] +'/'
-model_embedding.load_state_dict(torch.load(path+'model_brca', weights_only=False))
-X_test_omics = torch.from_numpy(np.load(path+'test_data_brca.npy')).float().to(device)
-Y_test = torch.from_numpy(np.load(path+'test_label_brca.npy')).long().squeeze().to(device)
-X_valid_omics = torch.from_numpy(np.load(path+'val_data_brca.npy')).float().to(device)
-Y_valid = torch.from_numpy(np.load(path+'val_label_brca.npy')).long().squeeze().to(device)
-X_train_omics = torch.from_numpy(np.load(path+'train_data_brca.npy')).float().to(device)
-Y_train = torch.from_numpy(np.load(path+'train_label_brca.npy')).long().squeeze().to(device)
+omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879]}[disease]
+
+def get_data(name_model):
+    model_sas = {'vae': SASEvae(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'ae':SASEae(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'ProdGammaDirVae':SASEpgdv(
+                    "ProdGamDirVae", 4, view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
+                    n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
+                ), 
+                'GammaDirVae':SASEgdv(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'lapdirvae': SASElap(view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                )
+                }[name_model]
+    params = {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'}
+    nb_classes = 5
+
+    model_embedding = model_sas.to(device)
+    path_model = f'../results/models_{disease}_' + name_model + '/' + params[name_model] +'/'
+    path = f'../results/data_{disease}' +'/'
+    model_embedding.load_state_dict(torch.load(path_model+f'model_{disease}', weights_only=False))
+    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy')).float().to(device)
+    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy')).long().squeeze().to(device)
+    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy')).float().to(device)
+    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy')).long().squeeze().to(device)
+    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy')).float().to(device)
+    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy')).long().squeeze().to(device)
 
 
-Xs = []
-with torch.no_grad():
-    for X_loader in [X_train_omics,X_valid_omics]:
-        if name_model == 'vae':
-            (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
-            view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
-            view3_specific_em_new, view3_specific_mu_new, view3_specific_sigma_new, view3_shared_em_new,
-            view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new,
-            view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new,
-            view1_shared_mlp_new, view2_shared_mlp_new, view3_shared_mlp_new) = (
-                model_embedding(X_loader[:,:omics_shape[0]], 
-                X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
-                X_loader[:,omics_shape[0]+omics_shape[1]:]))
-        elif name_model == 'ae':
-            view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
-            view2_shared_em_new, view3_specific_em_new,  \
-            view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
-            view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-            view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
-                X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
-                X_loader[:,omics_shape[0]+omics_shape[1]:])
-        elif name_model == 'GammaDirVae':
-            view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
-            view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
-            view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
-            view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-            view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
-                X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
-                X_loader[:,omics_shape[0]+omics_shape[1]:])
-        elif name_model == 'ProdGammaDirVae':
-            view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
-            view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
-            view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
-            view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-            view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
-                X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
-                X_loader[:,omics_shape[0]+omics_shape[1]:])
-        elif name_model == 'lapdirvae':
-            view1_specific_em_new, view1_specific_mu_new, view1_specific_sig_new, view1_shared_em_new, view2_specific_em_new, \
-            view2_specific_mu_new, view2_specific_sig_new, view2_shared_em_new, view3_specific_em_new, view3_specific_mu_new, \
-            view3_specific_sig_new, view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
-            view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-            view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
-                X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
-                X_loader[:,omics_shape[0]+omics_shape[1]:])
-        view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
-        final_embedding = torch.cat(
-            (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
-        out_shapes = [view1_specific_em_new.shape[1], view2_specific_em_new.shape[1], view3_specific_em_new.shape[1], view_shared_common.shape[1]]
-        final_embedding = final_embedding
-        Xs.append(final_embedding)
+    Xs = []
+    with torch.no_grad():
+        for X_loader in [X_train_omics,X_valid_omics,X_test_omics]:
+            if name_model == 'vae':
+                (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
+                view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
+                view3_specific_em_new, view3_specific_mu_new, view3_specific_sigma_new, view3_shared_em_new,
+                view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new,
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new,
+                view1_shared_mlp_new, view2_shared_mlp_new, view3_shared_mlp_new) = (
+                    model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:]))
+            elif name_model == 'ae':
+                view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_shared_em_new, view3_specific_em_new,  \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'GammaDirVae':
+                view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'ProdGammaDirVae':
+                view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'lapdirvae':
+                view1_specific_em_new, view1_specific_mu_new, view1_specific_sig_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_mu_new, view2_specific_sig_new, view2_shared_em_new, view3_specific_em_new, view3_specific_mu_new, \
+                view3_specific_sig_new, view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
+            final_embedding = torch.cat(
+                (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
+            out_shapes = [view1_specific_em_new.shape[1], view2_specific_em_new.shape[1], view3_specific_em_new.shape[1], view_shared_common.shape[1]]
+            final_embedding = final_embedding
+            print(final_embedding.shape)
+            Xs.append(final_embedding)
 
-X_train, X_valid = Xs
-X_mu = torch.mean(X_train, dim=0)
-X_std = torch.std(X_train, dim=0)
+    X_train, X_valid, X_test = Xs
 
-X_train = X_train-X_mu
-X_train = X_train/X_std
+    print(X_train.shape, X_valid.shape, X_test.shape)
 
-X_valid = X_valid-X_mu
-X_valid = X_valid/X_std
+    X_mu = torch.mean(X_train, dim=0)
+    X_std = torch.std(X_train, dim=0)
 
-index0, index1 = 0,128
-X_valid = X_valid[:,index0:index1]
-X_train = X_train[:,index0:index1]
-Xd = xgboost.XGBClassifier(0.1, max_depth=1)
-Xd.fit(X_train, Y_train)
-print(Xd.score(X_train, Y_train))
-print(Xd.score(X_valid, Y_valid))
+    X_train = X_train-X_mu
+    X_train = X_train/X_std
 
-print("logistic_regression")
-LR = LogisticRegression(penalty='l1', C=0.1, fit_intercept=False, solver='saga', multi_class='multinomial')
-LR.fit(X_train, Y_train)
-print(LR.score(X_train, Y_train))
-print(LR.score(X_valid, Y_valid))
+    X_valid = X_valid-X_mu
+    X_valid = X_valid/X_std
 
-xs_separation = [sum(out_shapes[:i+1]) for i in range(3)]
+    X_test = X_test-X_mu
+    X_test = X_test/X_std
 
-plt.rcParams["figure.figsize"] = (10,25)
-for i,c in enumerate(LR.coef_):
-    plt.subplot(5,1,i+1)
-    plt.grid()
-    plt.plot(c)
-    plt.vlines(x=xs_separation, linestyles="dotted", ymin=-1000, ymax=1000)
-    plt.ylim(min(c)-0.05, max(c)+0.05)
-    plt.title(f'class {i}')
-    plt.xlabel('Feature Index')
-    plt.ylabel('Weight Value')
-#plt.show()
-plt.savefig(f"weights_{name_model}.pdf")
-plt.show()
+    Xd = xgboost.XGBClassifier(0.1, max_depth=1)
+    Xd.fit(X_train, Y_train)
+    print(Xd.score(X_train, Y_train))
+    print(Xd.score(X_valid, Y_valid))
+    return X_train, Y_train, X_valid, Y_valid, X_test, Y_test, out_shapes
 
-for i,c in enumerate(LR.coef_):
-    plt.subplot(5,1,i+1)
-    plt.grid()
-    d = np.abs(c)
-    plt.plot(d)
-    plt.vlines(x=xs_separation, linestyles="dotted", ymin=-1000, ymax=1000)
-    plt.ylim(min(d)-0.05, max(d)+0.05)
-    plt.title(f'class {i}')
-    plt.xlabel('Feature Index')
-    plt.ylabel('Weight Value')
-#plt.show()
-plt.savefig(f"abs_weights_{name_model}.pdf")
-plt.show()
+OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared']}[disease]
+Separations = [32, 64, 96]
 
-plt.rcParams["figure.figsize"] = (10,10)
-xs_b = ([0]+xs_separation+[sum(out_shapes)+1])
-nb_embs = len(xs_separation)+1
-for i,c in enumerate(LR.coef_):
-    plt.subplot(5,1,i+1)
-    plt.grid()
-    importances_per_emb = [sum(np.abs(c[xs_b[i]:xs_b[i+1]])) for i in range(nb_embs)]
-    plt.bar(['Specific 1', 'Specific 2', 'Specific 3', 'Shared'], importances_per_emb)
-    plt.title(f'class {i}')
-    plt.xlabel('Feature Index')
-    plt.ylabel('Summed Weigt Values')
-#plt.show()
-plt.savefig(f"abs_mod_weights_{name_model}.pdf")
-plt.show()
+def extract_omics(x, omics):
+    xs = [x[:,:32]*1., x[:,32:64]*1., x[:,64:96]*1., x[:,96:]*1.]
+    for i in range(4):
+        if i not in omics:
+            xs[i] *= 0.
+    return np.concatenate(xs, axis=1)
+
+def best_lr(X_train, Y_train, X_valid, Y_valid):
+    best_score = 0
+    lr = None
+    for c in [1000, 100, 10, 1, 0.5, 0.2, 0.1,0.05,0.02,0.01]:
+        LR = LogisticRegression(penalty='l1', C=c, fit_intercept=False, solver='saga', multi_class='multinomial')
+        LR.fit(X_train, Y_train)
+        score = LR.score(X_valid, Y_valid)
+        #print(score)
+        if score > best_score:
+            best_score = score
+            lr = LR
+        #print(best_score)
+    return best_score, lr
+
+def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_shapes, which_omics=[0,1,2,3]):
+
+    X_train = extract_omics(Xtr, which_omics)
+    X_valid = extract_omics(Xval, which_omics)
+    X_test = extract_omics(Xtest, which_omics)
+
+    score, LR = best_lr(X_train, Y_train, X_valid, Y_valid)
+    test_score = LR.score(X_test, Y_test)
+    print(score, test_score)
+    test_score = int(test_score*100)/100
+    names = '-'.join([OMICS_NAMES[o] for o in which_omics])
+
+    results_dir = os.path.join('results', name_model, names)
+
+    if not os.path.isdir(results_dir):
+        os.makedirs(results_dir)
+
+    plt.rcParams["figure.figsize"] = (10,25)
+    for i,c in enumerate(LR.coef_):
+        plt.subplot(5,1,i+1)
+        plt.grid()
+        plt.plot(c)
+        plt.vlines(x=Separations, linestyles="dotted", ymin=-1000, ymax=1000)
+        plt.ylim(min(c)-0.05, max(c)+0.05)
+        plt.title(f'class {i}')
+        plt.xlabel('Feature Index')
+        plt.ylabel(f'Weight Value')
+    #plt.show()
+    plt.savefig(f"{results_dir}/weights.pdf")
+    plt.clf()
+    #plt.show()
+
+    for i,c in enumerate(LR.coef_):
+        plt.subplot(5,1,i+1)
+        plt.grid()
+        d = np.abs(c)
+        plt.plot(d)
+        plt.vlines(x=Separations, linestyles="dotted", ymin=-1000, ymax=1000)
+        plt.ylim(min(d)-0.05, max(d)+0.05)
+        plt.title(f'class {i}')
+        plt.xlabel('Feature Index')
+        plt.ylabel(f'Weight Value')
+    #plt.show()
+    plt.savefig(f"{results_dir}/abs_weights.pdf")
+    plt.clf()
+    #plt.show()
+
+    subtypes = {0: "normal-like", 1: "basal", 2: "HER2-enriched", 3: "LumA", 4: "LumB"}
+    plt.rcParams["figure.figsize"] = (10, 10)
+    xs_b = ([0] + Separations + [sum(out_shapes) + 1])
+    nb_embs = len(Separations) + 1
+    norm_coef = np.sum(LR.coef_)
+    Importances = []
+    max_overall = 0
+    for i, c in enumerate(LR.coef_):
+        plt.subplot(5, 1, i + 1)
+        plt.grid()
+        importances_per_emb = [sum(np.abs(c[xs_b[i]:xs_b[i + 1]])) for i in range(nb_embs)]
+        Importances.append(importances_per_emb)
+        max_overall = max(max_overall, max(importances_per_emb))
+    for i, c in enumerate(Importances):
+        plt.subplot(5, 1, i + 1)
+        x_norm = c / max_overall
+        plt.bar(OMICS_NAMES, x_norm)
+        plt.ylim(0, 1)
+        plt.title(subtypes[i]) #(f'class {i}')
+        plt.ylabel(f'Summed Weight Values')    #plt.show()
+    plt.savefig(f"{results_dir}/abs_mod_weights.pdf")
+    plt.clf()
+    #plt.show()
+    return test_score,names,LR,X_train,X_valid,X_test
+
+def all_ablations(Xtr, Y_train, Xval, Y_valid, X_test, Y_test, name_model, out_shapes):
+    log_file = 'results/logs.txt'
+    scores = []
+    for omics_list in [[0,1,2,3], [0], [1], [2], [3], [0,1,2], [0,1,3], [0,2,3], [1,2,3]]:
+        print(omics_list)
+        score,names,_,_,_,_ = one_ablation(Xtr, Y_train, Xval, Y_valid, X_test, Y_test, name_model, out_shapes, omics_list)
+        scores.append(f'{names}: {score}\n')
+    with open(log_file, 'a') as file:
+        file.write(name_model + '\n')
+        for s in scores:
+            file.write(s)
+        file.write('\n')
+
+def all_expes():
+    for name_model in ['ProdGammaDirVae', 'ae', 'vae', 'GammaDirVae', 'lapdirvae']:
+        X_train, Y_train, X_valid, Y_valid, X_test, Y_test,out_shapes = get_data(name_model)
+        all_ablations(X_train, Y_train, X_valid, Y_valid, X_test, Y_test, name_model, out_shapes)
+
+all_expes()
 
 # %%
+"""
 def make_mlp(in_dim, hidden_dim, out_dim, nb_layers, activation, dropout, norm):
     assert nb_layers>1
     lays = []
@@ -222,7 +295,6 @@ mlp_model = make_mlp(
     norm=None#torch.nn.LayerNorm
 ).to(device)
 
-"""
 list_models = []
 for i in range(nb_classes):
     utilities = {i:MonotonicSelector for i in range(128)}
@@ -238,10 +310,9 @@ class MCC(nn.Module):
     def forward(self, x):
         outs = [modu(x) for modu in self.elements]
         return torch.cat(outs, 1)
-"""
+
 linear_model = torch.nn.Linear(X_train.shape[1], nb_classes).to(device)
 #model = MCC(list_models).to(device)
-"""
 def accuracy(A,B):
     return(torch.sum(A==B)/len(A))
 

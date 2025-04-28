@@ -184,8 +184,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "AutoEncoder"
-    disease = 'brca' #'brca' 'coad' 'lihc'
-    num_clust = 5 # 5, 4, 2
+    disease = 'lihc' #'brca' 'coad' 'lihc'
+    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease] # 5, 4, 2
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 

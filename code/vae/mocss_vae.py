@@ -248,7 +248,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 def main(args):
     method = "VAE"
     disease = 'lihc'
-    num_clust = 2
+    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease]
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -261,7 +261,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
+    path = ('../../results/models_'+disease+'_vae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:

@@ -9,14 +9,14 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-
+disease = 'lihc'
 EPOCHS = 100
-LR = [.0003, .0002, .0001, .0004, .0005, .0006] # .0007
+LR  = {'kirc': [.0001],  'coad': [0.0001], 'lihc':[0.0003]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
 ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
 MODEL = "standard"
-WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
+WEIGHT_DECAY  = {'kirc': [.0006],  'coad': [0.0006], 'lihc':[0.0006]}[disease]
 #Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
@@ -30,7 +30,6 @@ def work(p):
     n_clusters = 2
     temperature = 0.4
     method = "gamma_dirvae"
-    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 

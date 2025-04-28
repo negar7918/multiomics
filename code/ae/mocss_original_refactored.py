@@ -221,7 +221,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
+    path = ('../../results/models_'+disease+'_ae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:

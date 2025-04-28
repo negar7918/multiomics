@@ -9,14 +9,14 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-
+disease = 'kirc'
 EPOCHS = 100
-LR = [.0003, .0002, .0001, .0004, .0005, .0006] # .0007
+LR = {'kirc': [.0003],  'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
 BATCH_SIZE = 32
 USE_GPU = False
 ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
 MODEL = "standard"
-WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
+WEIGHT_DECAY =  {'kirc': [.0007],  'coad': [0.0006], 'lihc':[0.0007]}[disease]
 #Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
@@ -28,7 +28,6 @@ def work(p):
     model_path = ''
     early_stopper = EarlyStopper(patience=30, min_delta=10)
     temperature = 0.4
-    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -114,12 +113,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Hyperparameter Tuning')
     parser.add_argument("--epochs", type=int, help='The number of epochs to train', default=EPOCHS)
     parser.add_argument("--batch-size", type=int, help='Batch-size', default=BATCH_SIZE)
-    parser.add_argument("--no-parallel", type=bool, help="Do not use cpu parallelism", default=True)
+    #parser.add_argument("--no-parallel", type=bool, help="Do not use cpu parallelism", default=True)
 
     args, unknown = parser.parse_known_args()
     if unknown:
         raise ValueError(f'Unkown args: {unknown}')
-    parser.add_argument('gpu' if torch.cuda.is_available() else "cpu", type=str, help='Whether to use GPU')
+    parser.add_argument('gpu' if USE_GPU else "cpu", type=str, help='Whether to use GPU')
     # parser.add_argument('num_of_clusters', type=int, help='A required integer argument')
     # parser.add_argument('temperature', type=float, help='A required float argument')
     # parser.add_argument('method', type=str, help='Choose variational or hyperbolic')

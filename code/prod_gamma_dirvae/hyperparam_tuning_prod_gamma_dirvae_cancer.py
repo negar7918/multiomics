@@ -2,22 +2,22 @@ import torch.optim
 import numpy as np
 import argparse
 from sklearn.model_selection import train_test_split
-from training import train, validation, EarlyStopper
+from multiomics.code.prod_gamma_dirvae.training import train, validation, EarlyStopper
 from multiomics.code.loading_data import load_data
-from prod_gamma_dirvae_cancer import setup_seed, SharedAndSpecificLoss, SharedAndSpecificEmbedding
+from multiomics.code.prod_gamma_dirvae.prod_gamma_dirvae_cancer import setup_seed, SharedAndSpecificLoss, SharedAndSpecificEmbedding
 import os
 import warnings
 warnings.filterwarnings("ignore")
 
-
+disease = 'lihc'
 EPOCHS = 100
-LR = [.0003, .0002, .0001, .0004, .0005, .0006] # .0007
-n_groups = [2, 3, 4, 5]
+LR = {'kirc': [.0003],  'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
+n_groups = {'kirc': [4],  'coad': [5], 'lihc':[4]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
 ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
 MODEL = "standard"
-WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
+WEIGHT_DECAY = {'kirc': [.0005],  'coad': [0.0003], 'lihc':[0.0007]}[disease]
 #Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
@@ -30,7 +30,6 @@ def work(p):
     early_stopper = EarlyStopper(patience=30, min_delta=10)
     temperature = 0.4
     method = "prod_gamma_dirvae"
-    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
