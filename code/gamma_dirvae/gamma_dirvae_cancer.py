@@ -267,7 +267,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 def main(args):
     n_clusters = 2 #5, 4
     method = "GammaDirVae"
-    disease = 'lihc'
+    disease = 'coad'
     USE_GPU = False
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)

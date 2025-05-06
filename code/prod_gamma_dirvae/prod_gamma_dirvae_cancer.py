@@ -280,7 +280,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "ProdGamDirVae"
-    disease = 'lihc'
+    disease = 'coad'
     USE_GPU = False
     num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease]
 
@@ -299,7 +299,10 @@ def main(args):
                 dict = {'loss': l, 'config': config}
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
-    folder = '0.0003_0.0005_4' #loss_min['config']
+    folder = {'brca': '0.0003_0.0005_4',
+        'lihc': '0.0005_0.0007_4',
+        'kric': '0.0003_0.0005_4',
+        'coad': '0.0002_0.0003_5'}[disease]
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)

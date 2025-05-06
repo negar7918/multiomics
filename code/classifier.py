@@ -30,11 +30,11 @@ import matplotlib.pyplot as plt
 #from neurhci.marginal_utilities import MonotonicSelector, MarginalUtilitiesLayer, IdentityClipped, Identity
 import xgboost
 import os
-#%%
-device = 'cpu'
-disease = 'lihc'
 
-omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879]}[disease]
+device = 'cpu'
+disease = 'coad'
+
+omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046]}[disease]
 
 def get_data(name_model):
     model_sas = {'vae': SASEvae(
@@ -62,19 +62,27 @@ def get_data(name_model):
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 )
                 }[name_model]
-    params = {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'}
-    nb_classes = 5
+    params = {
+        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+    nb_classes = {
+        'brca': 5,
+        'lihc': 2,
+        'coad': 4,
+        'kric': 2}[disease]
 
     model_embedding = model_sas.to(device)
-    path_model = f'../results/models_{disease}_' + name_model + '/' + params[name_model] +'/'
+    path_model = f'../results/models_{disease}_' + name_model + '/' + params[disease][name_model] +'/'
     path = f'../results/data_{disease}' +'/'
     model_embedding.load_state_dict(torch.load(path_model+f'model_{disease}', weights_only=False))
-    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy')).float().to(device)
-    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy')).long().squeeze().to(device)
-    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy')).float().to(device)
-    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy')).long().squeeze().to(device)
-    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy')).float().to(device)
-    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy')).long().squeeze().to(device)
+    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy', allow_pickle=True)).float().to(device)
+    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
+    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy', allow_pickle=True)).float().to(device)
+    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
+    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy', allow_pickle=True)).float().to(device)
+    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
 
 
     Xs = []
@@ -152,7 +160,7 @@ def get_data(name_model):
     print(Xd.score(X_valid, Y_valid))
     return X_train, Y_train, X_valid, Y_valid, X_test, Y_test, out_shapes
 
-OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared']}[disease]
+OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared']}[disease]
 Separations = [32, 64, 96]
 
 def extract_omics(x, omics):

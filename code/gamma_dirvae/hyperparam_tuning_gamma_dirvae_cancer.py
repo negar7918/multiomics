@@ -9,7 +9,7 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-disease = 'lihc'
+disease = 'coad'
 EPOCHS = 100
 LR  = {'kirc': [.0001],  'coad': [0.0001], 'lihc':[0.0003]}[disease]
 BATCH_SIZE = 32
