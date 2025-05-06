@@ -295,7 +295,7 @@ def main(args):
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
-    desired_path = os.path.join(path, folder)
+    #desired_path = os.path.join(path, folder)
     data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
     label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
@@ -320,6 +320,7 @@ def main(args):
         'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
     folder2 = all_params[disease]['GammaDirVae']
     model_path = os.path.join(path2, folder2)
+    desired_path = model_path
     model.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
     model.eval()
 
