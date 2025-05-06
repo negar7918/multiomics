@@ -284,8 +284,8 @@ def main(args):
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
     desired_path = os.path.join(path, folder)
-    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
-    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
+    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]

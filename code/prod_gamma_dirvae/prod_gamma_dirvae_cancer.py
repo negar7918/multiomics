@@ -304,8 +304,8 @@ def main(args):
         'kric': '0.0003_0.0005_4',
         'coad': '0.0002_0.0003_5'}[disease]
     desired_path = os.path.join(path, folder)
-    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
-    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
+    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
     s = int(folder[-1]) # the number of groups
     model = SharedAndSpecificEmbedding(
         method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],

@@ -87,23 +87,28 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(path, disease), X_train)
-    np.save('{}/train_label_{}'.format(path, disease), y_train)
-    np.save('{}/val_data_{}'.format(path, disease), X_val)
-    np.save('{}/val_label_{}'.format(path, disease), y_val)
-    np.save('{}/test_data_{}'.format(path, disease), X_test)
-    np.save('{}/test_label_{}'.format(path, disease), y_test)
-    np.save('{}/loss'.format(path), loss_best)
+    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
+    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
+    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
+    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
+    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
+    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
+    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
 
 
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
     if not USE_GPU:
-        pool = torch.multiprocessing.Pool(10)
-        param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
-        pool.map(work, param)
-        pool.close()
+        #pool = torch.multiprocessing.Pool(1)
+        #param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
+        #pool.map(work, param)
+        #pool.close()
+        for lr in LR:
+            for wd in WEIGHT_DECAY:
+                for n_g in n_groups:
+                    p = (batch, epochs, lr, wd, n_g)
+                    work(p)
     else:
         for lr in LR:
             for wd in WEIGHT_DECAY:
