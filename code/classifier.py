@@ -36,11 +36,6 @@ disease = 'coad'
 
 omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046], 'coad': [17260, 19052, 375]}[disease]
 group_numbers = {'brca': 4, 'coad': 5, 'lihc':4, 'kirc': 4}[disease]
-params = {
-    'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
-    'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-    'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
-    'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
 nb_classes = {
     'brca': 5,
     'lihc': 2,
@@ -75,20 +70,20 @@ def get_data(name_model):
                 }[name_model]
 
     model_embedding = model_sas.to(device)
-    path_model = f'../results/models_{disease}_' + name_model + '/' + params[disease][name_model] +'/'
+    path_all = f'../results/{disease}/'
+    model_embedding.load_state_dict(torch.load(path_all+f'model_{disease}_{name_model}', weights_only=False))
     path = f'../results/data_{disease}' +'/'
-    model_embedding.load_state_dict(torch.load(path_model+f'model_{disease}', weights_only=False))
-    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
-    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
-    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
-    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
-    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
-    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
+    data_base = load_data('coad')
+    X_train, X_test, y_train, y_test = train_test_split(data_base[3], data_base[4], test_size=0.2, random_state=1)
 
+    X_test_omics = torch.from_numpy(X_test.astype(float)).float().to(device)
+    Y_test = y_test.astype(int)
+    X_train_omics = torch.from_numpy(X_train.astype(float)).float().to(device)
+    Y_train = y_train.astype(int)
 
     Xs = []
     with torch.no_grad():
-        for X_loader in [X_train_omics,X_valid_omics,X_test_omics]:
+        for X_loader in [X_train_omics, X_test_omics]:
             if name_model == 'vae':
                 (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
                 view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
@@ -137,52 +132,70 @@ def get_data(name_model):
             out_shapes = [view1_specific_em_new.shape[1], view2_specific_em_new.shape[1], view3_specific_em_new.shape[1], view_shared_common.shape[1]]
             final_embedding = final_embedding
             print(final_embedding.shape)
-            Xs.append(final_embedding)
+            Xs.append(final_embedding.detach().numpy())
 
-    X_train, X_valid, X_test = Xs
+    return X_train, Y_train, Xs[0], X_test, Y_test, Xs[1], out_shapes
 
-    print(X_train.shape, X_valid.shape, X_test.shape)
-
-    X_mu = torch.mean(X_train, dim=0)
-    X_std = torch.std(X_train, dim=0)
-
-    X_train = X_train-X_mu
-    X_train = X_train/X_std
-
-    X_valid = X_valid-X_mu
-    X_valid = X_valid/X_std
-
-    X_test = X_test-X_mu
-    X_test = X_test/X_std
-
-    Xd = xgboost.XGBClassifier(0.1, max_depth=1)
-    Xd.fit(X_train, Y_train)
-    print(Xd.score(X_train, Y_train))
-    print(Xd.score(X_valid, Y_valid))
-    return X_train, Y_train, X_valid, Y_valid, X_test, Y_test, out_shapes
-
-
+#%%
 OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
 Separations = [32, 64, 96]
 
 def extract_omics(x, omics):
     xs = [x[:,:32]*1., x[:,32:64]*1., x[:,64:96]*1., x[:,96:]*1.]
-    for i in range(4):
-        if i not in omics:
-            xs[i] *= 0.
-    return np.concatenate(xs, axis=1)
+    return np.concatenate([xs[i] for i in omics], axis=1)
 
-def best_lr(X_train, Y_train, X_valid, Y_valid):
-    best_score = 0.
-    lr = None
-    for c in [1000., 100., 10., 1., 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 1e-3]:
-        LR = LogisticRegression(penalty='l2', C=c, fit_intercept=False, solver='lbfgs', multi_class='multinomial')
-        LR.fit(X_train, Y_train)
-        score = LR.score(X_valid, Y_valid)
-        if score > best_score:
-            best_score = score
-            lr = LR
-    return best_score, lr
+def one_knn(X_train, Y_train, X_test, Y_test):
+    best_inertia = float("inf")
+    best_labels = None
+    for i in range(30):
+        kmeans = KMeans(n_clusters=nb_classes, init='k-means++', random_state=i)
+        labels = kmeans.fit_predict(X_test)
+        if kmeans.inertia_ < best_inertia:
+            best_inertia = kmeans.inertia_
+            best_labels = labels
+    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(Y_test, best_labels)
+    print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+                            'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+    
+    knn = KNeighborsClassifier(n_neighbors=nb_classes)
+    # Train the model
+    knn.fit(X_train, Y_train)
+    # Predict on test set
+    y_pred = knn.predict(X_test)
+    accuracy = accuracy_score(Y_test, y_pred)
+    print(f"kNN acc: {accuracy:.2f}")
+    return nmi_, accuracy
+
+def one_ablation(X_train, Y_train, X_test, Y_test, which_omics=[0,1,2,3]):
+    xe = extract_omics(X_test, which_omics)
+    xr = extract_omics(X_train, which_omics)
+    print(xe.shape, xr.shape)
+    nmi, acc = one_knn(xr, Y_train, xe, Y_test)
+    return nmi, acc
+
+def all_ablations(X_train, Y_train, X_test, Y_test, name_model):
+    log_file = f'results/logs_{disease}.txt'
+    scores = []
+    for omics_list in [[0,1,2,3], [0], [1], [2], [3], [0,1,2], [0,1,3], [0,2,3], [1,2,3]]:
+        print(omics_list)
+        nmi, acc = one_ablation(X_train, Y_train, X_test, Y_test, omics_list)
+        names = ', '.join([OMICS_NAMES[i] for i in omics_list])
+        scores.append(f'{names}: {acc}\n')
+    with open(log_file, 'a') as file:
+        file.write(name_model + '\n')
+        for s in scores:
+            file.write(s)
+        file.write('\n')
+
+def all_expes():
+    for name_model in ['ae', 'ProdGammaDirVae', 'vae', 'GammaDirVae', 'lapdirvae']:
+        X_train, Y_train, _, X_test, Y_test, _, out_shapes = get_data(name_model)
+        all_ablations(X_train, Y_train, X_test, Y_test, name_model)
+
+all_expes()
+
+# %%
+'''
 
 def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_shapes, which_omics=[0,1,2,3]):
 
@@ -274,10 +287,8 @@ def all_expes():
     for name_model in ['ae', 'ProdGammaDirVae', 'vae', 'GammaDirVae', 'lapdirvae']:
         X_train, Y_train, X_valid, Y_valid, X_test, Y_test,out_shapes = get_data(name_model)
         all_ablations(X_train, Y_train, X_valid, Y_valid, X_test, Y_test, name_model, out_shapes)
+'''
 
-all_expes()
-
-# %%
 """
 def make_mlp(in_dim, hidden_dim, out_dim, nb_layers, activation, dropout, norm):
     assert nb_layers>1
