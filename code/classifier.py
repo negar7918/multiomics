@@ -34,7 +34,18 @@ import os
 device = 'cpu'
 disease = 'coad'
 
-omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046]}[disease]
+omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046], 'coad': [17260, 19052, 375]}[disease]
+group_numbers = {'brca': 4, 'coad': 5, 'lihc':4, 'kirc': 4}[disease]
+params = {
+    'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+    'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+    'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+    'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+nb_classes = {
+    'brca': 5,
+    'lihc': 2,
+    'coad': 4,
+    'kric': 2}[disease]
 
 def get_data(name_model):
     model_sas = {'vae': SASEvae(
@@ -48,7 +59,7 @@ def get_data(name_model):
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 ), 
                 'ProdGammaDirVae':SASEpgdv(
-                    "ProdGamDirVae", 4, view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    "ProdGamDirVae", group_numbers, view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
                     n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
                     n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
                 ), 
@@ -62,27 +73,17 @@ def get_data(name_model):
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 )
                 }[name_model]
-    params = {
-        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
-        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
-        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
-    nb_classes = {
-        'brca': 5,
-        'lihc': 2,
-        'coad': 4,
-        'kric': 2}[disease]
 
     model_embedding = model_sas.to(device)
     path_model = f'../results/models_{disease}_' + name_model + '/' + params[disease][name_model] +'/'
     path = f'../results/data_{disease}' +'/'
     model_embedding.load_state_dict(torch.load(path_model+f'model_{disease}', weights_only=False))
-    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy', allow_pickle=True)).float().to(device)
-    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
-    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy', allow_pickle=True)).float().to(device)
-    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
-    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy', allow_pickle=True)).float().to(device)
-    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy', allow_pickle=True)).long().squeeze().to(device)
+    X_test_omics = torch.from_numpy(np.load(path+f'test_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
+    Y_test = torch.from_numpy(np.load(path+f'test_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
+    X_valid_omics = torch.from_numpy(np.load(path+f'val_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
+    Y_valid = torch.from_numpy(np.load(path+f'val_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
+    X_train_omics = torch.from_numpy(np.load(path+f'train_data_{disease}.npy', allow_pickle=True).astype(float)).float().to(device)
+    Y_train = torch.from_numpy(np.load(path+f'train_label_{disease}.npy', allow_pickle=True).astype(int)).squeeze().to(device)
 
 
     Xs = []
@@ -160,7 +161,8 @@ def get_data(name_model):
     print(Xd.score(X_valid, Y_valid))
     return X_train, Y_train, X_valid, Y_valid, X_test, Y_test, out_shapes
 
-OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared']}[disease]
+
+OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
 Separations = [32, 64, 96]
 
 def extract_omics(x, omics):
@@ -171,17 +173,15 @@ def extract_omics(x, omics):
     return np.concatenate(xs, axis=1)
 
 def best_lr(X_train, Y_train, X_valid, Y_valid):
-    best_score = 0
+    best_score = 0.
     lr = None
-    for c in [1000, 100, 10, 1, 0.5, 0.2, 0.1,0.05,0.02,0.01]:
-        LR = LogisticRegression(penalty='l1', C=c, fit_intercept=False, solver='saga', multi_class='multinomial')
+    for c in [1000., 100., 10., 1., 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 1e-3]:
+        LR = LogisticRegression(penalty='l2', C=c, fit_intercept=False, solver='lbfgs', multi_class='multinomial')
         LR.fit(X_train, Y_train)
         score = LR.score(X_valid, Y_valid)
-        #print(score)
         if score > best_score:
             best_score = score
             lr = LR
-        #print(best_score)
     return best_score, lr
 
 def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_shapes, which_omics=[0,1,2,3]):
@@ -192,18 +192,17 @@ def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_sha
 
     score, LR = best_lr(X_train, Y_train, X_valid, Y_valid)
     test_score = LR.score(X_test, Y_test)
-    print(score, test_score)
     test_score = int(test_score*100)/100
     names = '-'.join([OMICS_NAMES[o] for o in which_omics])
 
-    results_dir = os.path.join('results', name_model, names)
+    results_dir = os.path.join('results', disease, name_model, names)
 
     if not os.path.isdir(results_dir):
         os.makedirs(results_dir)
 
     plt.rcParams["figure.figsize"] = (10,25)
     for i,c in enumerate(LR.coef_):
-        plt.subplot(5,1,i+1)
+        plt.subplot(nb_classes,1,i+1)
         plt.grid()
         plt.plot(c)
         plt.vlines(x=Separations, linestyles="dotted", ymin=-1000, ymax=1000)
@@ -217,7 +216,7 @@ def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_sha
     #plt.show()
 
     for i,c in enumerate(LR.coef_):
-        plt.subplot(5,1,i+1)
+        plt.subplot(nb_classes,1,i+1)
         plt.grid()
         d = np.abs(c)
         plt.plot(d)
@@ -231,21 +230,23 @@ def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_sha
     plt.clf()
     #plt.show()
 
-    subtypes = {0: "normal-like", 1: "basal", 2: "HER2-enriched", 3: "LumA", 4: "LumB"}
+    subtypes = {'brca':{0: "normal-like", 1: "basal", 2: "HER2-enriched", 3: "LumA", 4: "LumB"}, 'coad': {0: 'CIN', 1: 'GS', 2:'MSI', 3:'POLE'}}[disease]
     plt.rcParams["figure.figsize"] = (10, 10)
     xs_b = ([0] + Separations + [sum(out_shapes) + 1])
     nb_embs = len(Separations) + 1
     norm_coef = np.sum(LR.coef_)
     Importances = []
-    max_overall = 0
+    max_overall = 0.
     for i, c in enumerate(LR.coef_):
-        plt.subplot(5, 1, i + 1)
+        plt.subplot(nb_classes, 1, i + 1)
         plt.grid()
         importances_per_emb = [sum(np.abs(c[xs_b[i]:xs_b[i + 1]])) for i in range(nb_embs)]
         Importances.append(importances_per_emb)
         max_overall = max(max_overall, max(importances_per_emb))
     for i, c in enumerate(Importances):
-        plt.subplot(5, 1, i + 1)
+        plt.subplot(nb_classes, 1, i + 1)
+        print(c)
+        print(max_overall)
         x_norm = c / max_overall
         plt.bar(OMICS_NAMES, x_norm)
         plt.ylim(0, 1)
@@ -257,7 +258,7 @@ def one_ablation(Xtr, Y_train, Xval, Y_valid, Xtest, Y_test, name_model, out_sha
     return test_score,names,LR,X_train,X_valid,X_test
 
 def all_ablations(Xtr, Y_train, Xval, Y_valid, X_test, Y_test, name_model, out_shapes):
-    log_file = 'results/logs.txt'
+    log_file = f'results/logs_{disease}.txt'
     scores = []
     for omics_list in [[0,1,2,3], [0], [1], [2], [3], [0,1,2], [0,1,3], [0,2,3], [1,2,3]]:
         print(omics_list)
@@ -270,7 +271,7 @@ def all_ablations(Xtr, Y_train, Xval, Y_valid, X_test, Y_test, name_model, out_s
         file.write('\n')
 
 def all_expes():
-    for name_model in ['ProdGammaDirVae', 'ae', 'vae', 'GammaDirVae', 'lapdirvae']:
+    for name_model in ['ae', 'ProdGammaDirVae', 'vae', 'GammaDirVae', 'lapdirvae']:
         X_train, Y_train, X_valid, Y_valid, X_test, Y_test,out_shapes = get_data(name_model)
         all_ablations(X_train, Y_train, X_valid, Y_valid, X_test, Y_test, name_model, out_shapes)
 
