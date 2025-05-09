@@ -37,7 +37,7 @@ device = 'cpu'
 
 #%%
 def get_data(name_model, disease):
-    omics_shape = {'brca': [1000,1000,503], 'kric': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046], 'coad': [17260, 19052, 375]}[disease]
+    omics_shape = {'brca': [1000,1000,503], 'kirc': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046], 'coad': [17260, 19052, 375]}[disease]
     group_numbers = {'brca': 4, 'coad': 5, 'lihc':4, 'kirc': 4}[disease]
     model_sas = {'vae': SASEvae(
                     view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
@@ -73,6 +73,8 @@ def get_data(name_model, disease):
     all_labels = data_base[4]
     if disease == 'brca':
         all_labels = all_labels.to_numpy()
+    elif disease == 'kirc':
+        all_labels = all_labels[:,1].astype(int)
     X_train, X_test, y_train, y_test = train_test_split(data_base[3], all_labels.reshape(-1), test_size=0.2, random_state=1)
 
     X_test_omics = torch.from_numpy(X_test.astype(float)).float().to(device)
@@ -145,7 +147,7 @@ def one_knn(X_train, Y_train, X_test, Y_test, disease):
             'brca': 5,
             'lihc': 2,
             'coad': 4,
-            'kric': 2}[disease]    
+            'kirc': 2}[disease]    
     best_inertia = float("inf")
     best_labels = None
     for i in range(30):
@@ -200,7 +202,7 @@ def shapley_size_4_dirty(score_dict):
             
 #%%
 def all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease):
-    OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kric':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
+    OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kirc':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
     log_file = f'results/logs_{disease}.txt'
     scores = []
     score_dict = {():0.}
@@ -239,7 +241,6 @@ def all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease):
     return score_dict
 
 def all_expes(disease):
-    disease = 'brca'
     score_dicts = {}
     for name_model in ['ae', 'vae', 'GammaDirVae', 'lapdirvae', 'ProdGammaDirVae']:
         print(name_model)
@@ -247,5 +248,5 @@ def all_expes(disease):
         score_dicts[name_model] = all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease)
     return score_dict
 
-score_dict = all_expes('coad')
+score_dict = all_expes('kirc')
 # %%
