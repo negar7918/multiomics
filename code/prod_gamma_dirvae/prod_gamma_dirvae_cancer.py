@@ -148,21 +148,17 @@ class SharedAndSpecificEmbedding(nn.Module):
                 linears[type+j+'_l1'] = nn.Linear(view_size[i-1], units[j][0])
                 linears[type+j+'_l2'] = nn.Linear(units[j][0], units[j][1])
                 linears[type+j+'_l3'] = nn.Linear(units[j][1], units[j][2])
-                if type == 'shared':
-                    linears[type + j + '_l4'] = nn.Linear(units[j][2], K * units[j][3])
-                else:
-                    linears[type+j+'_l4'] = nn.Linear(units[j][2], units[j][3])
+                linears[type + j + '_l4'] = nn.Linear(units[j][2], units[j][3]) 
+
                 # decoder  (4 layers)
-                if type == 'shared':
-                    linears[type + j + '_l3_'] = nn.Linear(K * units[j][3], units[j][2])
-                else:
-                    linears[type+j+'_l3_'] = nn.Linear(units[j][3], units[j][2])
+                linears[type + j + '_l3_'] = nn.Linear(units[j][3], units[j][2])
+
                 linears[type+j+'_l2_'] = nn.Linear(units[j][2], units[j][1])
                 linears[type+j+'_l1_'] = nn.Linear(units[j][1], units[j][0])
                 linears[type+j+'_rec'] = nn.Linear(units[j][0], view_size[i-1])
 
-            linears['view' + j + '_mlp1'] = nn.Linear(K * units[j][3], mlp_size[0])
-            #linears['view'+j+'_mlp1'] = nn.Linear(units[j][3], mlp_size[0])
+            #linears['view' + j + '_mlp1'] = nn.Linear(K * units[j][3], mlp_size[0])
+            linears['view'+j+'_mlp1'] = nn.Linear(units[j][3], mlp_size[0])
             linears['view'+j+'_mlp2'] = nn.Linear(mlp_size[0], mlp_size[1])
 
         # The order is very important since _modules is an OrderedDictionary

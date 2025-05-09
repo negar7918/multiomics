@@ -73,6 +73,9 @@ def get_data(name_model, disease):
     all_labels = data_base[4]
     if disease == 'brca':
         all_labels = all_labels.to_numpy()
+    elif disease == 'lihc':
+        all_labels_str = all_labels[:,-1]
+        all_labels = np.array([len(k)-1 for k in all_labels_str])
     elif disease == 'kirc':
         all_labels = all_labels[:,1].astype(int)
     X_train, X_test, y_train, y_test = train_test_split(data_base[3], all_labels.reshape(-1), test_size=0.2, random_state=1)
@@ -242,11 +245,15 @@ def all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease):
 
 def all_expes(disease):
     score_dicts = {}
-    for name_model in ['ae', 'vae', 'GammaDirVae', 'lapdirvae', 'ProdGammaDirVae']:
+    for name_model in ['ae', 'vae', 'GammaDirVae', 'ProdGammaDirVae', 'lapdirvae']:
         print(name_model)
         _, Y_train, X_train, _, Y_test, X_test, out_shapes, _ = get_data(name_model, disease)
         score_dicts[name_model] = all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease)
-    return score_dict
+    return score_dicts
 
-score_dict = all_expes('kirc')
+#scores_dict_kirc = all_expes('kirc')
+#scores_dict_coad = all_expes('coad')
+#scores_dict_brca = all_expes('brca')
+scores_dict_lihc = all_expes('lihc')
+
 # %%
