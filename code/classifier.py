@@ -78,16 +78,21 @@ def get_data(name_model, disease):
         all_labels = np.array([len(k)-1 for k in all_labels_str])
     elif disease == 'kirc':
         all_labels = all_labels[:,1].astype(int)
-    X_train, X_test, y_train, y_test = train_test_split(data_base[3], all_labels.reshape(-1), test_size=0.2, random_state=1)
+    
+    _, X_whole_test, _, y_whole_test = train_test_split(data_base[3], all_labels.reshape(-1), test_size=0.2, random_state=1)
+    X_subtrain, X_subtest, y_subtrain, y_subtest = train_test_split(X_whole_test, y_whole_test, test_size=0.25, random_state=12)
+    
 
-    X_test_omics = torch.from_numpy(X_test.astype(float)).float().to(device)
-    Y_test = y_test.astype(int)
-    X_train_omics = torch.from_numpy(X_train.astype(float)).float().to(device)
-    Y_train = y_train.astype(int)
+    X_whole_test_omics = torch.from_numpy(X_whole_test.astype(float)).float().to(device)
+    Y_whole_test = y_whole_test.astype(int)
+    X_subtest_omics = torch.from_numpy(X_subtest.astype(float)).float().to(device)
+    Y_subtest = y_subtest.astype(int)
+    X_subtrain_omics = torch.from_numpy(X_subtrain.astype(float)).float().to(device)
+    Y_subtrain = y_subtrain.astype(int)
 
     Xs = []
     with torch.no_grad():
-        for X_loader in [X_train_omics, X_test_omics]:
+        for X_loader in [X_subtrain_omics, X_subtest_omics, X_whole_test_omics]:
             if name_model == 'vae':
                 (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
                 view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
@@ -138,14 +143,14 @@ def get_data(name_model, disease):
             print(final_embedding.shape)
             Xs.append(final_embedding.detach().numpy())
 
-    return X_train, Y_train, Xs[0], X_test, Y_test, Xs[1], out_shapes, model_embedding
+    return X_subtrain, Y_subtrain, Xs[0], X_subtest, Y_subtest, Xs[1], X_whole_test, Y_whole_test, Xs[2], out_shapes, model_embedding
 
 #%%
 def extract_omics(x, omics):
     xs = [x[:,:32]*1., x[:,32:64]*1., x[:,64:96]*1., x[:,96:]*1.]
     return np.concatenate([xs[i] for i in omics], axis=1)
 
-def one_knn(X_train, Y_train, X_test, Y_test, disease):
+def one_knn(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, disease):
     nb_classes = {
             'brca': 5,
             'lihc': 2,
@@ -155,27 +160,28 @@ def one_knn(X_train, Y_train, X_test, Y_test, disease):
     best_labels = None
     for i in range(30):
         kmeans = KMeans(n_clusters=nb_classes, init='k-means++', random_state=i)
-        labels = kmeans.fit_predict(X_test)
+        labels = kmeans.fit_predict(X_whole_test)
         if kmeans.inertia_ < best_inertia:
             best_inertia = kmeans.inertia_
             best_labels = labels
-    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(Y_test, best_labels)
+    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(Y_whole_test, best_labels)
     #print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
     #                        'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
     
-    knn = KNeighborsClassifier(n_neighbors=5)
+    knn = KNeighborsClassifier(n_neighbors=nb_classes)
     # Train the model
-    knn.fit(X_train, Y_train)
+    knn.fit(X_subtrain, Y_subtrain)
     # Predict on test set
-    y_pred = knn.predict(X_test)
-    accuracy = accuracy_score(Y_test, y_pred)
+    y_pred = knn.predict(X_subtest)
+    accuracy = accuracy_score(Y_subtest, y_pred)
     #print(f"kNN acc: {accuracy:.2f}")
     return nmi_, accuracy
 
-def one_ablation(X_train, Y_train, X_test, Y_test, which_omics, disease):
-    xe = extract_omics(X_test, which_omics)
-    xr = extract_omics(X_train, which_omics)
-    nmi, acc = one_knn(xr, Y_train, xe, Y_test, disease)
+def one_ablation(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, which_omics, disease):
+    xe = extract_omics(X_subtest, which_omics)
+    xr = extract_omics(X_subtrain, which_omics)
+    xw = extract_omics(X_whole_test, which_omics)
+    nmi, acc = one_knn(xr, Y_subtrain, xe, Y_subtest, xw, Y_whole_test, disease)
     return nmi, acc
 
 def insert_i_in_tuple(tup, i):
@@ -204,7 +210,7 @@ def shapley_size_4_dirty(score_dict):
     return shapley_values
             
 #%%
-def all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease):
+def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease):
     OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kirc':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
     log_file = f'results/logs_{disease}.txt'
     scores = []
@@ -216,7 +222,7 @@ def all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease):
         all_combinations += all_combs_i
     for omics_list in all_combinations:
         #print(omics_list)
-        nmi, acc = one_ablation(X_train, Y_train, X_test, Y_test, omics_list, disease)
+        nmi, acc = one_ablation(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, omics_list, disease)
         names = ', '.join([OMICS_NAMES[i] for i in omics_list])
         scores.append(f'{names}: KNN accuracy: {acc}, nmi: {nmi}\n')
         score_dict[omics_list] = acc
@@ -247,13 +253,14 @@ def all_expes(disease):
     score_dicts = {}
     for name_model in ['ae', 'vae', 'GammaDirVae', 'ProdGammaDirVae', 'lapdirvae']:
         print(name_model)
-        _, Y_train, X_train, _, Y_test, X_test, out_shapes, _ = get_data(name_model, disease)
-        score_dicts[name_model] = all_ablations(X_train, Y_train, X_test, Y_test, name_model, disease)
+        _, Y_subtrain, X_subtrain, _, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, _ = get_data(name_model, disease)
+        score_dicts[name_model] = all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease)
     return score_dicts
 
-#scores_dict_kirc = all_expes('kirc')
-#scores_dict_coad = all_expes('coad')
-#scores_dict_brca = all_expes('brca')
+#%%
+scores_dict_kirc = all_expes('kirc')
+scores_dict_coad = all_expes('coad')
+scores_dict_brca = all_expes('brca')
 scores_dict_lihc = all_expes('lihc')
 
 # %%
