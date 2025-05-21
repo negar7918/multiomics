@@ -34,6 +34,15 @@ import xgboost
 import os
 
 device = 'cpu'
+POSITION = 0
+
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+
+setup_seed(2)
 
 #%%
 def get_data(name_model, disease):
@@ -44,7 +53,7 @@ def get_data(name_model, disease):
                     n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 ), 
-                'ae':SASEae(
+                'MOCSS (AE)':SASEae(
                     view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
                     n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
@@ -64,24 +73,22 @@ def get_data(name_model, disease):
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 )
                 }[name_model]
-
     model_embedding = model_sas.to(device)
     path_all = f'../results/{disease}/'
     model_embedding.load_state_dict(torch.load(path_all+f'model_{disease}_{name_model}', weights_only=False))
-    path = f'../results/data_{disease}' +'/'
-    data_base = load_data(disease)
-    all_labels = data_base[4]
+    path = f'../../data/data_test' +'/'
+    X_whole_test = np.load(os.path.join(path, f'test_data_{disease}.npy'), allow_pickle=True)
+    all_labels = np.load(os.path.join(path, f'test_label_{disease}.npy'), allow_pickle=True)
     if disease == 'brca':
-        all_labels = all_labels.to_numpy()
+        y_whole_test = all_labels.flatten()
     elif disease == 'lihc':
         all_labels_str = all_labels[:,-1]
-        all_labels = np.array([len(k)-1 for k in all_labels_str])
+        y_whole_test = np.array([len(k)-1 for k in all_labels_str])
     elif disease == 'kirc':
-        all_labels = all_labels[:,1].astype(int)
-    
-    _, X_whole_test, _, y_whole_test = train_test_split(data_base[3], all_labels.reshape(-1), test_size=0.2, random_state=1)
+        y_whole_test = all_labels[:,1].astype(int)
+    else:
+        y_whole_test = all_labels
     X_subtrain, X_subtest, y_subtrain, y_subtest = train_test_split(X_whole_test, y_whole_test, test_size=0.25, random_state=12)
-    
 
     X_whole_test_omics = torch.from_numpy(X_whole_test.astype(float)).float().to(device)
     Y_whole_test = y_whole_test.astype(int)
@@ -103,7 +110,7 @@ def get_data(name_model, disease):
                     model_embedding(X_loader[:,:omics_shape[0]], 
                     X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
                     X_loader[:,omics_shape[0]+omics_shape[1]:]))
-            elif name_model == 'ae':
+            elif name_model == 'MOCSS (AE)':
                 view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
                 view2_shared_em_new, view3_specific_em_new,  \
                 view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
@@ -211,7 +218,9 @@ def shapley_size_4_dirty(score_dict):
             
 #%%
 def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease):
-    OMICS_NAMES = {'brca': ['mRNA', 'DNAmethyl', 'miRNA', 'Shared'], 'kirc':['gene1', 'methyl', 'miRNA1', 'Shared'], 'lihc':['gene', 'methyl', 'miRNA', 'Shared'], 'coad':['mRNA', 'Methy', 'miRNA', 'Shared']}[disease]
+    global POSITION
+    POSITION += 1
+    OMICS_NAMES = ['mRNA', 'DNAmethyl', 'miRNA', 'Shared']
     log_file = f'results/logs_{disease}.txt'
     scores = []
     score_dict = {():0.}
@@ -247,20 +256,39 @@ def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_
             file.write(o + ': ' + '{:.2f}'.format(s) + '\n')
         file.write('\n')
 
+    plt.subplot(4, 5, POSITION)
+    plt.bar(OMICS_NAMES, shapley_values_acc)
+    plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value')
+    plt.title(f"Shapley values of each omic for accuracy, {name_model}, {disease}")
+    plt.grid()
+    #plt.savefig(f'../results/shapley_acc_{disease}_{name_model}')
+    #plt.clf()
+    '''
+    plt.bar(OMICS_NAMES, shapley_values_nmi)
+    plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value')
+    plt.title(f"Shapley values of each omic for nmi, {name_model}, {disease}")
+    plt.grid()
+    plt.savefig(f'../results/shapley_nmi_{disease}_{name_model}')
+    plt.clf()
+    '''
     return score_dict
 
 def all_expes(disease):
     score_dicts = {}
-    for name_model in ['ae', 'vae', 'GammaDirVae', 'ProdGammaDirVae', 'lapdirvae']:
+    for name_model in ['MOCSS (AE)', 'vae', 'lapdirvae', 'GammaDirVae', 'ProdGammaDirVae']:
         print(name_model)
         _, Y_subtrain, X_subtrain, _, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, _ = get_data(name_model, disease)
         score_dicts[name_model] = all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease)
     return score_dicts
 
 #%%
+POSITION = 0
+
 scores_dict_kirc = all_expes('kirc')
 scores_dict_coad = all_expes('coad')
 scores_dict_brca = all_expes('brca')
 scores_dict_lihc = all_expes('lihc')
-
+plt.show()
 # %%
