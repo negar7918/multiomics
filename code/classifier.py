@@ -35,6 +35,7 @@ import os
 
 device = 'cpu'
 POSITION = 0
+OMICS_NAMES = ['mRNA', 'DNAmethyl', 'miRNA', 'Shared']
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -53,7 +54,7 @@ def get_data(name_model, disease):
                     n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
                 ), 
-                'MOCSS (AE)':SASEae(
+                'ae':SASEae(
                     view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
                     n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
                     n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
@@ -110,7 +111,7 @@ def get_data(name_model, disease):
                     model_embedding(X_loader[:,:omics_shape[0]], 
                     X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
                     X_loader[:,omics_shape[0]+omics_shape[1]:]))
-            elif name_model == 'MOCSS (AE)':
+            elif name_model == 'ae':
                 view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
                 view2_shared_em_new, view3_specific_em_new,  \
                 view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
@@ -218,9 +219,6 @@ def shapley_size_4_dirty(score_dict):
             
 #%%
 def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease):
-    global POSITION
-    POSITION += 1
-    OMICS_NAMES = ['mRNA', 'DNAmethyl', 'miRNA', 'Shared']
     log_file = f'results/logs_{disease}.txt'
     scores = []
     score_dict = {():0.}
@@ -256,39 +254,141 @@ def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_
             file.write(o + ': ' + '{:.2f}'.format(s) + '\n')
         file.write('\n')
 
-    plt.subplot(4, 5, POSITION)
-    plt.bar(OMICS_NAMES, shapley_values_acc)
-    plt.xlabel('Omics Names')
-    plt.ylabel('Shapley Value')
-    plt.title(f"Shapley values of each omic for accuracy, {name_model}, {disease}")
-    plt.grid()
-    #plt.savefig(f'../results/shapley_acc_{disease}_{name_model}')
-    #plt.clf()
-    '''
-    plt.bar(OMICS_NAMES, shapley_values_nmi)
-    plt.xlabel('Omics Names')
-    plt.ylabel('Shapley Value')
-    plt.title(f"Shapley values of each omic for nmi, {name_model}, {disease}")
-    plt.grid()
-    plt.savefig(f'../results/shapley_nmi_{disease}_{name_model}')
-    plt.clf()
-    '''
-    return score_dict
+    return shapley_values_acc, shapley_values_nmi, score_dict, nmi_dict
 
 def all_expes(disease):
     score_dicts = {}
-    for name_model in ['MOCSS (AE)', 'vae', 'lapdirvae', 'GammaDirVae', 'ProdGammaDirVae']:
+    for name_model in ['ae', 'vae', 'lapdirvae', 'GammaDirVae', 'ProdGammaDirVae']:
         print(name_model)
         _, Y_subtrain, X_subtrain, _, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, _ = get_data(name_model, disease)
         score_dicts[name_model] = all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease)
     return score_dicts
 
-#%%
-POSITION = 0
 
-scores_dict_kirc = all_expes('kirc')
-scores_dict_coad = all_expes('coad')
-scores_dict_brca = all_expes('brca')
-scores_dict_lihc = all_expes('lihc')
-plt.show()
+#%%
+shaps_all = {}
+for disease in ['kirc', 'coad', 'brca', 'lihc']:
+    shaps_all[disease] = all_expes(disease)
+# %%
+def plot_shaps(shaps, name_model):
+    x = np.arange(4)
+    width = 6
+    colors = ['red', 'blue', 'green', 'orange']
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'ProdGamDirVae'}[name_model]
+    fig,ax = plt.subplots(figsize=(13,4), dpi=80)
+    x = np.arange(4)
+    width = 6
+    bar_handles = {}
+    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
+        shapley_values = shaps[disease][name_model][0]
+        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
+        for j, bar in enumerate(bars):
+            if OMICS_NAMES[j] not in bar_handles:
+                bar_handles[OMICS_NAMES[j]] = bar
+        ax.text(
+            i * width, 
+            -0.05,  # Negative position moves the text below bars
+            disease, 
+            ha='center', 
+            fontsize=15
+        )
+    #plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value for Accuracy')
+    plt.title(f"{name_model_clean}")
+    ax.set_xticks([])
+    ax.legend(bar_handles.values(), bar_handles.keys())
+    plt.grid()
+    plt.ylim(0, 0.5)
+    plt.savefig(f'../results/shapley_acc_{name_model}.pdf')
+    
+    plt.clf()
+
+    fig,ax = plt.subplots(figsize=(13,4), dpi=120)
+    bar_handles = {}
+    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
+        shapley_values = shaps[disease][name_model][1]
+        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
+        for j, bar in enumerate(bars):
+            if OMICS_NAMES[j] not in bar_handles:
+                bar_handles[OMICS_NAMES[j]] = bar
+        ax.text(
+            i * width, 
+            -0.05,  # Negative position moves the text below bars
+            disease, 
+            ha='center', 
+            fontsize=15
+        )
+    #plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value for NMI')
+    plt.title(f"{name_model_clean}")
+    ax.set_xticks([])
+    ax.legend(bar_handles.values(), bar_handles.keys())
+    plt.grid()
+    plt.savefig(f'../results/shapley_nmi_{name_model}.pdf')
+    
+    plt.clf()
+
+plot_shaps(shaps_all, 'ae')
+plot_shaps(shaps_all, 'vae')
+plot_shaps(shaps_all, 'lapdirvae')
+plot_shaps(shaps_all, 'GammaDirVae')
+plot_shaps(shaps_all, 'ProdGammaDirVae')
+
+# %%
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# brca, coad, lihc, kirc
+def plot_ablations(shaps_all, name_model):
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'ProdGamDirVae'}[name_model]
+    n_data = 4
+    vals = []
+    names = []
+    plt.figure(figsize=(12, 6))
+    diseases = ['brca', 'coad', 'lihc', 'kirc']
+    for i,disease in enumerate(diseases):
+        dict_values = shaps_all[disease][name_model][2]
+        for j,(k,v) in enumerate(dict_values.items()):
+            if len(k):
+                if i==0:
+                    names.append(', '.join([OMICS_NAMES[omic_idx] for omic_idx in k]))
+                    vals.append([])
+                vals[j-1].append(v)
+    vals = np.array(vals).T
+    
+    markers = ['o', 'x', 's', '*']
+    colors = ['blue', 'orange', 'red', 'green']
+    for i,v in enumerate(vals):
+        plt.plot(range(len(v)), v, label=diseases[i], linestyle='None', color=colors[i], marker=markers[i])
+    
+    plt.xticks(ticks=np.arange(15), labels=names, rotation=45)
+    plt.title(f"Ablation Study for {name_model_clean}")
+    plt.ylabel("k-NN Accuracy")
+    plt.tight_layout()
+    plt.legend(loc='lower right')
+    plt.grid()
+    plt.savefig(f'ablation_dots{name_model}.pdf')
+    plt.clf()
+
+    # Plot
+    data_titled = {d:vals.T[i] for i,d in enumerate(names)}
+    #return data_titled
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(data=data_titled, color='tab:blue')
+    plt.grid()
+
+    # Only draw a horizontal line at the median for group "B"
+    plt.xticks(rotation=45)  # Rotate x labels if needed
+    plt.title(f"Ablation Study for {name_model_clean}")
+    plt.tight_layout()
+    plt.savefig(f'ablation_boxplots_{name_model}.pdf')
+# %%
+    
+plot_ablations(shaps_all, 'ae')
+plot_ablations(shaps_all, 'vae')
+plot_ablations(shaps_all, 'lapdirvae')
+plot_ablations(shaps_all, 'GammaDirVae')
+plot_ablations(shaps_all, 'ProdGammaDirVae')
 # %%
