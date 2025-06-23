@@ -264,9 +264,9 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 
 def main(args):
-    n_clusters = 2 #5, 4
+    n_clusters = 5 #5, 4
     method = "GammaDirVae"
-    disease = 'lihc'
+    disease = 'brca'
     USE_GPU = False
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
@@ -414,11 +414,11 @@ def main(args):
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
     else:
-        util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
+        #util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
         #util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, desired_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, desired_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, desired_path + "/_miRNA_em", method)
+        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
+        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
+        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -442,6 +442,8 @@ def main(args):
 
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
+
+        #util.visualize_final_embedding(final_embedding[:, :32], dir=model_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Method Running')
