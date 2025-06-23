@@ -62,6 +62,11 @@ class SharedAndSpecificLoss(nn.Module):
         loss = torch.linalg.matrix_norm(rec-ori)
         return loss
 
+    @staticmethod
+    def l1_loss(em):
+        l1_batch = torch.norm(em, 1, dim=1)
+        return l1_batch.mean()
+
     def forward(self, params):
         (shared1_output, shared2_output, shared3_output, specific1_output, specific2_output, specific3_output,
         shared1_rec, shared2_rec, shared3_rec, specific1_rec, specific2_rec, specific3_rec, ori1, ori2, ori3,
@@ -85,7 +90,13 @@ class SharedAndSpecificLoss(nn.Module):
         reconst_loss3 = self.reconstruction_loss(shared3_rec, ori3) + self.reconstruction_loss(specific3_rec, ori3)
         reconstruction_loss_all = reconst_loss1 + reconst_loss2 + reconst_loss3
 
-        loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all
+        # lasso loss
+        l1_loss1 = self.l1_loss(specific1_output)
+        l1_loss2 = self.l1_loss(specific2_output)
+        l1_loss3 = self.l1_loss(specific3_output)
+        l1_loss_all = l1_loss1 + l1_loss2 + l1_loss3
+
+        loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all #+ l1_loss_all
 
         return loss_total
 
@@ -207,8 +218,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "AutoEncoder"
-    disease = 'kirc' #'brca' 'coad' 'lihc'
-    num_clust = 2 # 5, 4, 2
+    disease = 'coad' #'brca' 'coad' 'lihc'
+    num_clust = 4 # 5, 4, 2
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -236,6 +247,8 @@ def main(args):
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+
+    print(folder)
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]
@@ -285,6 +298,8 @@ def main(args):
         mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
         truth_stage = [mapping[val] for val in lst]
         truth_class = label[:, 1].flatten().astype('int')
+    elif disease == 'kirc':
+        truth = label[:, 1].flatten().astype('int')
     else:
         truth = label.flatten()
 
@@ -353,11 +368,11 @@ def main(args):
 
     else:
 
-        util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
+        #util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
         # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
+        #util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
+        #util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
+        #util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
         km = KMeans(n_clusters=num_clust, random_state=42)
         y_pred = km.fit_predict(final_embedding)
         nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
@@ -380,6 +395,7 @@ def main(args):
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
 
+        #util.visualize_final_embedding(final_embedding[:,:32], dir=model_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Method Running')
