@@ -287,8 +287,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "LapDirVae"
-    disease = 'lihc'
-    num_clust = 2 #5
+    disease = 'kirc'
+    num_clust = 2
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -370,6 +370,11 @@ def main(args):
         mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
         truth_stage = [mapping[val] for val in lst]
         truth_class = label[:, 1].flatten().astype('int')
+    elif disease == 'kirc':
+        lst = label[:, 1:]
+        lst[lst == '1'] = 1
+        lst[lst == '0'] = 0
+        truth = lst.flatten().astype('int')
     else:
         truth = label.flatten()
     if disease == 'lihc':
