@@ -35,8 +35,10 @@ import os
 
 device = 'cpu'
 POSITION = 0
-OMICS_NAMES = ['mRNA', 'DNAmethyl', 'miRNA', 'Shared']
+OMICS_NAMES = ['mRNA', 'DNA', 'miRNA', 'Shared']
 
+
+#%%
 def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -274,8 +276,8 @@ def plot_shaps(shaps, name_model):
     x = np.arange(4)
     width = 6
     colors = ['red', 'blue', 'green', 'orange']
-    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'ProdGamDirVae'}[name_model]
-    fig,ax = plt.subplots(figsize=(13,4), dpi=80)
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'OMIDIENT'}[name_model]
+    fig,ax = plt.subplots(figsize=(6,4), dpi=80)
     x = np.arange(4)
     width = 6
     bar_handles = {}
@@ -303,7 +305,7 @@ def plot_shaps(shaps, name_model):
     
     plt.clf()
 
-    fig,ax = plt.subplots(figsize=(13,4), dpi=120)
+    fig,ax = plt.subplots(figsize=(6,4), dpi=120)
     bar_handles = {}
     for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
         shapley_values = shaps[disease][name_model][1]
@@ -342,11 +344,11 @@ import numpy as np
 
 # brca, coad, lihc, kirc
 def plot_ablations(shaps_all, name_model):
-    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'ProdGamDirVae'}[name_model]
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGammaDirVae':'OMIDIENT'}[name_model]
     n_data = 4
     vals = []
     names = []
-    plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(6, 6), dpi=80)
     diseases = ['brca', 'coad', 'lihc', 'kirc']
     for i,disease in enumerate(diseases):
         dict_values = shaps_all[disease][name_model][2]
@@ -358,34 +360,48 @@ def plot_ablations(shaps_all, name_model):
                 vals[j-1].append(v)
     vals = np.array(vals).T
     
+    colors_box = ['tab:red' if 'Shared' in n else 'tab:blue' for n in names]
+    rectangles = [('Shared' in n) for n in names]
+
     markers = ['o', 'x', 's', '*']
     colors = ['blue', 'orange', 'red', 'green']
+    text_colors = ['red' if r else 'black' for r in rectangles]
     for i,v in enumerate(vals):
-        plt.plot(range(len(v)), v, label=diseases[i], linestyle='None', color=colors[i], marker=markers[i])
-    
-    plt.xticks(ticks=np.arange(15), labels=names, rotation=45)
+        plt.plot(range(len(v)), v, label=diseases[i], color=colors[i], marker=markers[i])
+        #for hx,has_rectangle in enumerate(rectangles):
+            #if has_rectangle:
+                #plt.axvspan(hx - 0.4, hx + 0.4, alpha=0.3, edgecolor='red', color='grey')
+    plt.xticks(ticks=np.arange(15), labels=names, rotation=45, ha='right')
+    tick_labels = fig.get_axes()[0].get_xticklabels()
+    for label_idx in range(len(text_colors)):
+        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
+    plt.ylim(0., 1.1)
     plt.title(f"Ablation Study for {name_model_clean}")
     plt.ylabel("k-NN Accuracy")
     plt.tight_layout()
     plt.legend(loc='lower right')
     plt.grid()
-    plt.savefig(f'ablation_dots{name_model}.pdf')
+    plt.savefig(f'../results/ablation_dots{name_model}.pdf')
     plt.clf()
 
     # Plot
     data_titled = {d:vals.T[i] for i,d in enumerate(names)}
     #return data_titled
-    plt.figure(figsize=(12, 6))
-    sns.boxplot(data=data_titled, color='tab:blue')
+    fig = plt.figure(figsize=(6, 6), dpi=80)
+    sns.boxplot(data=data_titled, palette=colors_box)
     plt.grid()
 
     # Only draw a horizontal line at the median for group "B"
-    plt.xticks(rotation=45)  # Rotate x labels if needed
+    plt.xticks(rotation=45, ha='right')  # Rotate x labels if needed
+    tick_labels = fig.get_axes()[0].get_xticklabels()
+    for label_idx in range(len(text_colors)):
+        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
     plt.title(f"Ablation Study for {name_model_clean}")
     plt.tight_layout()
-    plt.savefig(f'ablation_boxplots_{name_model}.pdf')
-# %%
-    
+    plt.savefig(f'../results/ablation_boxplots_{name_model}.pdf')
+    plt.clf()
+    print(name_model_clean)
+#%%
 plot_ablations(shaps_all, 'ae')
 plot_ablations(shaps_all, 'vae')
 plot_ablations(shaps_all, 'lapdirvae')
