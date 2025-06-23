@@ -1,4 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
+from pandas import DataFrame
 from multiomics.code.loading_data import load_data
 from multiomics.code.prod_gamma_dirvae import prodDirVae
 from torch import nn
@@ -79,12 +81,6 @@ class SharedAndSpecificLoss(nn.Module):
          specific3_rec, shared1_mlp, shared2_mlp, shared3_mlp, specific1_alpha, specific2_alpha, specific3_alpha,
         temperature, batch_size) = params
 
-        # orthogonal restrict
-        orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
-        orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
-        orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
-        orthogonal_loss_all = orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
-
         # Contrastive Loss
         contrastive_loss1 = self.contrastive_loss(shared1_mlp, shared2_mlp, temperature, batch_size)
         contrastive_loss2 = self.contrastive_loss(shared1_mlp, shared3_mlp, temperature, batch_size)
@@ -110,7 +106,7 @@ class SharedAndSpecificLoss(nn.Module):
             KL += compute_kl_gamma(prior_alpha, specific2_alpha[k])
             KL += compute_kl_gamma(prior_alpha, specific3_alpha[k])
 
-        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL + orthogonal_loss_all
+        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL
 
         return loss_total
 
@@ -147,21 +143,14 @@ class SharedAndSpecificEmbedding(nn.Module):
                 linears[type+j+'_l1'] = nn.Linear(view_size[i-1], units[j][0])
                 linears[type+j+'_l2'] = nn.Linear(units[j][0], units[j][1])
                 linears[type+j+'_l3'] = nn.Linear(units[j][1], units[j][2])
-                if type == 'shared':
-                    linears[type + j + '_l4'] = nn.Linear(units[j][2], K * units[j][3])
-                else:
-                    linears[type+j+'_l4'] = nn.Linear(units[j][2], units[j][3])
+                linears[type+j+'_l4'] = nn.Linear(units[j][2], units[j][3])
                 # decoder  (4 layers)
-                if type == 'shared':
-                    linears[type + j + '_l3_'] = nn.Linear(K * units[j][3], units[j][2])
-                else:
-                    linears[type+j+'_l3_'] = nn.Linear(units[j][3], units[j][2])
+                linears[type+j+'_l3_'] = nn.Linear(units[j][3], units[j][2])
                 linears[type+j+'_l2_'] = nn.Linear(units[j][2], units[j][1])
                 linears[type+j+'_l1_'] = nn.Linear(units[j][1], units[j][0])
                 linears[type+j+'_rec'] = nn.Linear(units[j][0], view_size[i-1])
 
-            linears['view' + j + '_mlp1'] = nn.Linear(K * units[j][3], mlp_size[0])
-            #linears['view'+j+'_mlp1'] = nn.Linear(units[j][3], mlp_size[0])
+            linears['view'+j+'_mlp1'] = nn.Linear(units[j][3], mlp_size[0])
             linears['view'+j+'_mlp2'] = nn.Linear(mlp_size[0], mlp_size[1])
 
         # The order is very important since _modules is an OrderedDictionary
@@ -298,7 +287,7 @@ def main(args):
                 dict = {'loss': l, 'config': config}
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
-    folder = '0.0003_0.0005_4' #loss_min['config']
+    folder = loss_min['config']
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
@@ -444,24 +433,6 @@ def main(args):
 
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
-
-    # sim_data = []
-    # sim_em = []
-    # for i in range(data.shape[0]):
-    #     sim = nn.CosineSimilarity(dim=0, eps=1e-06)
-    #     sim_data = sim_data.append(sim(torch.from_numpy(data[i]), torch.from_numpy(data[i+1])))
-    #     sim_em = sim_em.append(sim(torch.from_numpy(final_embedding[i]), torch.from_numpy(final_embedding[i + 1])))
-    # fig, axes = plt.subplots(2, 1)
-    # axes[0, 0].plot(np.arange(data.shape[0]), sim_data)
-    # axes[0, 0].set_title("raw data similarities")
-    # axes[0, 0].set_xlabel("data")
-    # axes[1, 0].plot(np.arange(data.shape[0]), sim_em)
-    # axes[1, 0].set_title("embedding similarities")
-    # axes[1, 0].set_xlabel("embedding")
-    # plt.xlabel('data')
-    # plt.ylabel('similarity')
-    # plt.title("test data and embedding similarities")
-    # plt.savefig(desired_path + "/test_similarities.png")
 
 
 if __name__ == "__main__":
