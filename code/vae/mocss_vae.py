@@ -96,7 +96,7 @@ class SharedAndSpecificLoss(nn.Module):
 
         loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all + KL
 
-        return loss_total
+        return loss_total, KL
 
 
 class SharedAndSpecificEmbedding(nn.Module):
@@ -247,7 +247,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "VAE"
-    disease = 'lihc'
+    disease = 'kirc'
     num_clust = 2
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
@@ -276,6 +276,8 @@ def main(args):
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+
+    print(folder)
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]
@@ -327,6 +329,11 @@ def main(args):
         mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
         truth_stage = [mapping[val] for val in lst]
         truth_class = label[:, 1].flatten().astype('int')
+    elif disease == 'kirc':
+        lst = label[:, 1:]
+        lst[lst == '1'] = 1
+        lst[lst == '0'] = 0
+        truth = lst.flatten().astype('int')
     else:
         truth = label.flatten()
     if disease == 'lihc':
