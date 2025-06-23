@@ -11,13 +11,13 @@ warnings.filterwarnings("ignore")
 
 
 EPOCHS = 100
-LR = [.0003, .0002, .0001, .0004, .0005, .0006] # .0007
-n_groups = [2, 3, 4, 5]
+LR = [.0005] #[.0003, .0002, .0001, .0004, .0005, .0006] # .0007
+n_groups = [4] #[2, 3, 4, 5]
 BATCH_SIZE = 32
 USE_GPU = False
 ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
 MODEL = "standard"
-WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
+WEIGHT_DECAY = [7e-4] #[5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
 #Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
@@ -100,17 +100,17 @@ def work(p):
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
-    if not USE_GPU:
-        pool = torch.multiprocessing.Pool(10)
-        param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
-        pool.map(work, param)
-        pool.close()
-    else:
-        for lr in LR:
-            for wd in WEIGHT_DECAY:
-                for n_g in n_groups:
-                    p = (batch, epochs, lr, wd, n_g)
-                    work(p)
+    # if not USE_GPU:
+    #     pool = torch.multiprocessing.Pool(10)
+    #     param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
+    #     pool.map(work, param)
+    #     pool.close()
+    #else:
+    for lr in LR:
+        for wd in WEIGHT_DECAY:
+            for n_g in n_groups:
+                p = (batch, epochs, lr, wd, n_g)
+                work(p)
 
 
 if __name__ == "__main__":
