@@ -145,7 +145,7 @@ def plot_with_path(data, label, path, method):
     elif 'coad' in path:
         for t, l in zip(g1.legend_.texts, ["type I", "type II", "type III", "type IV"]):
             t.set_text(l)
-    elif 'lihc' in path:
+    elif 'lihc' or 'kirc' in path:
         for t, l in zip(g1.legend_.texts, ["type I", "type II"]):
             t.set_text(l)
     plt.title("t-SNE on "+method, fontsize=20)
@@ -171,7 +171,7 @@ def plot_with_path(data, label, path, method):
     elif 'coad' in path:
         for t, l in zip(g2.legend_.texts, ["type I", "type II", "type III", "type IV"]):
             t.set_text(l)
-    elif 'lihc' in path:
+    elif 'lihc' or 'kirc' in path:
         for t, l in zip(g2.legend_.texts, ["type I", "type II"]):
             t.set_text(l)
 
@@ -179,42 +179,65 @@ def plot_with_path(data, label, path, method):
     plt.savefig(path+ '_umap.png')
     plt.close()
 
-    # c1, c2, c3, c4, c5 = [], [], [], [], []
-    # plt.figure(figsize=(10, 4))
-    # fig, axes = plt.subplots(2, 3, figsize=(12, 6), gridspec_kw={'width_ratios': [2, 2, 2]})
-    # for i in range(len(data[:, 0])):
-    #     d = data[i, :-32]
-    #     if label[i] == 0:
-    #         c1.append(d)
-    #     elif label[i] == 1:
-    #         c2.append(d)
-    #     elif label[i] == 2:
-    #         c3.append(d)
-    #     elif label[i] == 3:
-    #         c4.append(d)
-    #     else:
-    #         c5.append(d)
-    # pos, names = np.linspace(0, 96, 4), ['mRNA', 'DNAMeth', 'miRNA']
-    # position = pos[:-1] + np.diff(pos) / 2
-    # axes[0, 0].scatter(np.arange(len(d)), np.mean(c1, axis=0), color='blue', alpha=0.5)
-    # axes[0, 0].set_xticks(position)
-    # axes[0, 0].set_xticklabels(names)
-    # axes[0, 1].scatter(np.arange(len(d)), np.mean(c2, axis=0), color='#FF00FF', alpha=0.5) # magenta
-    # axes[0, 1].set_xticks(position)
-    # axes[0, 1].set_xticklabels(names)
-    # axes[0, 2].scatter(np.arange(len(d)), np.mean(c3, axis=0), color='red', alpha=0.5)
-    # axes[0, 2].set_xticks(position)
-    # axes[0, 2].set_xticklabels(names)
-    # axes[1, 0].scatter(np.arange(len(d)), np.mean(c4, axis=0), color='#808000', alpha=0.5) # olive green
-    # axes[1, 0].set_xticks(position)
-    # axes[1, 0].set_xticklabels(names)
-    # axes[1, 1].scatter(np.arange(len(d)), np.mean(c5, axis=0), color='#00FF66', alpha=0.5) # phosphorous
-    # axes[1, 1].set_xticks(position)
-    # axes[1, 1].set_xticklabels(names)
-    # axes[1][2].set_visible(False)
-    # fig.suptitle('mean embeddings of '+method, fontsize=20)
-    # plt.savefig(path + '_vae.png')
-    # plt.close()
+    c1, c2, c3, c4, c5 = [], [], [], [], []
+    plt.figure(figsize=(10, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(12, 6), gridspec_kw={'width_ratios': [2, 2, 2]})
+    for i in range(len(data[:, 0])):
+        d = data[i, :4]
+        if label[i] == 0:
+            c1.append(d)
+        elif label[i] == 1:
+            c2.append(d)
+        elif label[i] == 2:
+            c3.append(d)
+        elif label[i] == 3:
+            c4.append(d)
+        else:
+            c5.append(d)
+    pos, names = np.linspace(0, 4, 4), ['mRNA', 'DNAMeth', 'miRNA']
+    x = [7, 15, 23, 31]
+    labels = ['g1', 'g2', 'g3', 'g4']
+    #axes[0, 0].set_xticks(x)
+    #axes[0, 0].set_xticklabels(labels)
+    axes[0].set_ylim(.11, .132)
+    #axes[0, 1].set_xticks(x)
+    #axes[0, 1].set_xticklabels(labels)
+    axes[0].set_xticklabels([])
+    axes[0].set_yticklabels([])
+    axes[1].set_xticklabels([])
+    axes[1].set_yticklabels([])
+    axes[2].set_xticklabels([])
+    axes[2].set_yticklabels([])
+    axes[1].set_ylim(.11, .132)
+    #axes[0, 2].set_xticks(x)
+    #axes[0, 2].set_xticklabels(labels)
+    axes[2].set_ylim(.11, .132)
+    position = pos[:-1] + np.diff(pos) / 2
+    axes[0].bar(np.arange(len(d)), np.mean(c1, axis=0), color='blue', alpha=0.5)
+    #axes[0, 0].set_xticks(position)
+    #axes[0, 0].set_xticklabels(names)
+    axes[1].bar(np.arange(len(d)), np.mean(c2, axis=0), color='#FF00FF', alpha=0.5) # magenta
+    #axes[0, 1].set_xticks(position)
+    #axes[0, 1].set_xticklabels(names)
+    #axes[0, 2].bar(np.arange(len(d)), np.mean(c3, axis=0), color='red', alpha=0.5)
+    #axes[0, 2].set_xticks(position)
+    #axes[0, 2].set_xticklabels(names)
+    #axes[1, 0].set_xticks(x)
+    #axes[1, 0].set_xticklabels(labels)
+    axes[1].set_ylim(.11, .132)
+    #axes[1, 1].set_xticks(x)
+    #axes[1, 1].set_xticklabels(labels)
+    axes[2].set_ylim(.11, .132)
+    axes[2].bar(np.arange(len(d)), np.mean(c4, axis=0), color='#808000', alpha=0.5) # olive green
+    #axes[1, 0].set_xticks(position)
+    #axes[1, 0].set_xticklabels(names)
+    #axes[1, 1].bar(np.arange(len(d)), np.mean(c5, axis=0), color='#00FF66', alpha=0.5) # phosphorous
+    #axes[1, 1].set_xticks(position)
+    #axes[1, 1].set_xticklabels(names)
+    #axes[1][2].set_visible(False)
+    fig.suptitle('mean embeddings of '+method, fontsize=20)
+    plt.savefig(path + '_bar.png')
+    plt.close()
 
 def plot_sim(data, path, name):
 
@@ -713,18 +736,3 @@ def plot(method, dir_prior, disease, final_embedding, view1_specific_em_new, vie
         print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
                                'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
-
-
-
-# # Set the random seed for reproducibility
-# np.random.seed(42)
-#
-# # Generate some data
-# data = np.random.rand(100, 2)
-#
-# # Run KMeans with a fixed random state
-# kmeans = KMeans(n_clusters=3, random_state=42)
-# labels = kmeans.fit_predict(data)
-#
-# # Print out the labels to ensure they are consistent
-# print(labels)
