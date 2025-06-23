@@ -44,7 +44,7 @@ def work(p):
 
     # creating directory to save each model
     directory = str(lr) + '_' + str(wd) #+ "_8x5em_10times1plusRelu_diffAlphaProds"
-    parent_dir = "../../results/models_"+disease+"_ae"
+    parent_dir = "../../results/models_"+disease+"_ae_lasso"
     path = os.path.join(parent_dir, directory)
     os.makedirs(path, exist_ok=True)
 
@@ -103,11 +103,11 @@ def main(args):
         param = [(batch, epochs, lr, wd) for lr in LR for wd in WEIGHT_DECAY]
         pool.map(work, param)
         pool.close()
-    else:
-        for lr in LR:
-            for wd in WEIGHT_DECAY:
-                p = (batch, epochs, lr, wd)
-                work(p)
+    # else:
+    # for lr in LR:
+    #     for wd in WEIGHT_DECAY:
+    #         p = (batch, epochs, lr, wd)
+    #         work(p)
 
 
 if __name__ == "__main__":
