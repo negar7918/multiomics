@@ -219,8 +219,8 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "VAE"
-    disease = 'brca'
-    num_clust = 5
+    disease = 'lihc'
+    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2}[disease]
 
     view1_data, view2_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -244,8 +244,8 @@ def main(args):
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
     desired_path = os.path.join(path, folder)
-    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
-    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
+    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
     print(folder)
 

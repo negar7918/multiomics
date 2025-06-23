@@ -9,17 +9,16 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-
+disease = 'kirc'
 EPOCHS = 100
-LR = [.0003, .0002, .0001, .0004, .0005, .0006] # .0007
+LR = {'kirc': [.0002],  'coad': [0.0001], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
 ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
 MODEL = "standard"
-WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
+WEIGHT_DECAY = {'kirc': [.0005],  'coad': [0.0006], 'lihc':[0.0005]}[disease]
 #Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
-
 
 def work(p):
     setup_seed(SEED)
@@ -30,7 +29,6 @@ def work(p):
     n_clusters = 2
     temperature = 0.4
     method = "lap_dirvae"
-    disease = 'lihc'
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -89,23 +87,23 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(path, disease), X_train)
-    np.save('{}/train_label_{}'.format(path, disease), y_train)
-    np.save('{}/val_data_{}'.format(path, disease), X_val)
-    np.save('{}/val_label_{}'.format(path, disease), y_val)
-    np.save('{}/test_data_{}'.format(path, disease), X_test)
-    np.save('{}/test_label_{}'.format(path, disease), y_test)
-    np.save('{}/loss'.format(path), loss_best)
+    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
+    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
+    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
+    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
+    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
+    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
+    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
 
 
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
     if not USE_GPU:
-        pool = torch.multiprocessing.Pool(10)
-        param = [(batch, epochs, lr, wd) for lr in LR for wd in WEIGHT_DECAY]
-        pool.map(work, param)
-        pool.close()
+        for lr in LR:
+            for wd in WEIGHT_DECAY:
+                p = (batch, epochs, lr, wd)
+                work(p)
     else:
         for lr in LR:
             for wd in WEIGHT_DECAY:

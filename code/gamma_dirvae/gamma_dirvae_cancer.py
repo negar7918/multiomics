@@ -79,10 +79,11 @@ class SharedAndSpecificLoss(nn.Module):
         temperature, batch_size) = params
 
         # orthogonal restrict
+        orthogonal_loss_all = 0.
         #orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
         #orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
         #orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
-        #orthogonal_loss_all = orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
+        #orthogonal_loss_all += orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
 
         # Contrastive Loss
         contrastive_loss1 = self.contrastive_loss(shared1_mlp, shared2_mlp, temperature, batch_size)
@@ -108,7 +109,7 @@ class SharedAndSpecificLoss(nn.Module):
         KL += compute_kl_gamma(prior_alpha, specific2_alpha)
         KL += compute_kl_gamma(prior_alpha, specific3_alpha)
 
-        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL
+        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL + orthogonal_loss_all
 
         return loss_total
 
@@ -264,9 +265,9 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 
 def main(args):
-    n_clusters = 5 #5, 4
+    disease = 'kirc'
+    n_clusters = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
     method = "GammaDirVae"
-    disease = 'brca'
     USE_GPU = False
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
@@ -282,7 +283,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
+    path = ('../../results/models_'+disease+'_GammaDirVae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:
@@ -294,9 +295,9 @@ def main(args):
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
-    desired_path = os.path.join(path, folder)
-    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
-    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    #desired_path = os.path.join(path, folder)
+    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
+    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]
@@ -312,7 +313,14 @@ def main(args):
                 ls2 = np.append(ls2, dict)
     loss_min2 = min(ls2, key=lambda x: x['loss'])
     folder2 = loss_min2['config']
+    all_params = {
+        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+    folder2 = all_params[disease]['GammaDirVae']
     model_path = os.path.join(path2, folder2)
+    desired_path = model_path
     model.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
     model.eval()
 

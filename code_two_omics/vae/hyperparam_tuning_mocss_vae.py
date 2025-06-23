@@ -28,7 +28,7 @@ def work(p):
     model_path = ''
     early_stopper = EarlyStopper(patience=30, min_delta=10)
     temperature = 0.4
-    disease = 'brca'
+    disease = 'lihc'
 
     view1_data, view2_data, view_train_concatenate, y_true = load_data(disease)
 

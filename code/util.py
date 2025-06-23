@@ -125,6 +125,7 @@ def plot_corr(data, label, path, method):
     plt.close()
 
 def plot_with_path(data, label, path, method):
+    print(path)
     tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
     tsne_results = tsne.fit_transform(data)
     df = pd.DataFrame(columns=['tsne-2d-one', 'tsne-2d-two'])
