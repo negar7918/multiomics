@@ -11,7 +11,7 @@ def variational_encoder_decoder(layers, input_data):
     out = F.tanh(l3(out))
     ####### Variational part
     out = alpha(out)
-    alpha_positive = F.sigmoid(out)  
+    alpha_positive = F.sigmoid(out)
     u = torch.rand(alpha_positive.shape)
     temp = u.mul(alpha_positive).mul(torch.exp(lgamma(alpha_positive)))
     em = torch.pow(temp, torch.pow(alpha_positive, -1))

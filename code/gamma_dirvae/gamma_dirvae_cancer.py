@@ -32,17 +32,6 @@ class SharedAndSpecificLoss(nn.Module):
         super(SharedAndSpecificLoss, self).__init__()
 
     @staticmethod
-    def orthogonal_loss(shared, specific):
-        shared = shared - shared.mean()
-        specific = specific - specific.mean()
-        shared = F.normalize(shared, p=2, dim=1)
-        specific = F.normalize(specific, p=2, dim=1)
-        # This is not inner product but they use it because the get better result
-        correlation_matrix = torch.mul(shared, specific)
-        cost = correlation_matrix.mean()
-        return cost
-
-    @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
         assert (shared_1.dim() == 2)
         assert (shared_2.dim() == 2)
@@ -78,13 +67,6 @@ class SharedAndSpecificLoss(nn.Module):
          specific3_rec, shared1_mlp, shared2_mlp, shared3_mlp, specific1_alpha, specific2_alpha, specific3_alpha,
         temperature, batch_size) = params
 
-        # orthogonal restrict
-        orthogonal_loss_all = 0.
-        #orthogonal_loss1 = self.orthogonal_loss(shared1_output, specific1_output)
-        #orthogonal_loss2 = self.orthogonal_loss(shared2_output, specific2_output)
-        #orthogonal_loss3 = self.orthogonal_loss(shared3_output, specific3_output)
-        #orthogonal_loss_all += orthogonal_loss1 + orthogonal_loss2 + orthogonal_loss3
-
         # Contrastive Loss
         contrastive_loss1 = self.contrastive_loss(shared1_mlp, shared2_mlp, temperature, batch_size)
         contrastive_loss2 = self.contrastive_loss(shared1_mlp, shared3_mlp, temperature, batch_size)
@@ -109,7 +91,7 @@ class SharedAndSpecificLoss(nn.Module):
         KL += compute_kl_gamma(prior_alpha, specific2_alpha)
         KL += compute_kl_gamma(prior_alpha, specific3_alpha)
 
-        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL + orthogonal_loss_all
+        loss_total = contrastive_loss_all + .7 * reconstruction_loss_all + KL
 
         return loss_total
 
@@ -117,21 +99,6 @@ class SharedAndSpecificLoss(nn.Module):
 class SharedAndSpecificEmbedding(nn.Module):
     def __init__(self, view_size, n_units_1, n_units_2, n_units_3, mlp_size):
         super(SharedAndSpecificEmbedding, self).__init__()
-        # # Dir prior
-        # self.num_of_clusters = K
-        #
-        # self.layers = nn.ModuleDict()
-        #
-        # for k in range(K):
-        #     self.layers.add_module('hid2alpha_specific1_{}'.format(k), nn.Linear(n_units_1[-2], n_units_1[-1]))
-        #     self.layers.add_module('hid2alpha_specific2_{}'.format(k), nn.Linear(n_units_2[-2], n_units_2[-1]))
-        #     self.layers.add_module('hid2alpha_specific3_{}'.format(k), nn.Linear(n_units_3[-2], n_units_3[-1]))
-        # self.layers.add_module('specific1_l3_KxL', nn.Linear(K * n_units_1[3], n_units_1[2])) #, n_units_1[1])) for 32x5 not 8x5
-        # self.layers.add_module('specific2_l3_KxL', nn.Linear(K * n_units_2[3], n_units_2[2]))
-        # self.layers.add_module('specific3_l3_KxL', nn.Linear(K * n_units_3[3], n_units_3[2]))
-        #
-        # self.method = method
-
 
         self.hid2alpha_specific1 = nn.Linear(n_units_1[-2], n_units_1[-1])
         self.hid2alpha_specific2 = nn.Linear(n_units_2[-2], n_units_2[-1])
@@ -212,20 +179,7 @@ class SharedAndSpecificEmbedding(nn.Module):
             reconstructed = torch.sigmoid(rec(out))
             return em, reconstructed
 
-
-        # alpha_layers_1, alpha_layers_2, alpha_layers_3 = [], [], []
-        # for layer in self.layers:
-        #     if layer.startswith('hid2alpha_specific1'):
-        #         alpha_layers_1.append(self.layers[layer])
-        #     elif layer.startswith('hid2alpha_specific2'):
-        #         alpha_layers_2.append(self.layers[layer])
-        #     elif layer.startswith('hid2alpha_specific3'):
-        #         alpha_layers_3.append(self.layers[layer])
-
         # View1
-        # l1_specific = (self.specific1_l1, self.specific1_l2, self.specific1_l3, self.specific1_l4, alpha_layers_1,
-        #                self.specific1_l3_, self.specific1_l2_, self.specific1_l1_, self.specific1_rec)
-
         l1_specific = (self.specific1_l1, self.specific1_l2, self.specific1_l3, self.specific1_l4, self.hid2alpha_specific1,
                        self.specific1_l3_, self.specific1_l2_, self.specific1_l1_, self.specific1_rec)
 
@@ -314,9 +268,9 @@ def main(args):
     loss_min2 = min(ls2, key=lambda x: x['loss'])
     folder2 = loss_min2['config']
     all_params = {
-        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
         'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'vae': '0.0003_0.0007'},
         'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
     folder2 = all_params[disease]['GammaDirVae']
     model_path = os.path.join(path2, folder2)
@@ -360,10 +314,6 @@ def main(args):
     if disease == 'lihc':
         util.plot_with_path(data, truth_class, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_class, desired_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_class, desired_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_class, desired_path + "/_miRNA_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -392,10 +342,6 @@ def main(args):
 
         util.plot_with_path(data, truth_stage, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_miRNA_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -422,11 +368,7 @@ def main(args):
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
     else:
-        #util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
-        #util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
+        util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -450,8 +392,6 @@ def main(args):
 
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
-
-        #util.visualize_final_embedding(final_embedding[:, :32], dir=model_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Method Running')
