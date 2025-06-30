@@ -14,12 +14,14 @@ disease = 'kirc' #'brca' 'coad' 'lihc'
 EPOCHS = 100
 LR = {'kirc': [.0002],  'coad': [0.0002], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
-USE_GPU = False
-ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
-MODEL = "standard"
+USE_GPU =  False
+parallel = False
 WEIGHT_DECAY = {'kirc': [.0007],  'coad': [0.0007], 'lihc':[0.0007]}[disease]
-#Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
+
+# use the blew instead (for LR and WEIGHT_DECAY) if you want to search over hyperparameters
+# LR = [.0003, .0002, .0001, .0004, .0005, .0006, .0007]
+# WEIGHT_DECAY = [5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
 
 
 def work(p):
@@ -43,8 +45,8 @@ def work(p):
         model = model.cuda()
 
     # creating directory to save each model
-    directory = str(lr) + '_' + str(wd) #+ "_8x5em_10times1plusRelu_diffAlphaProds"
-    parent_dir = "../../results/models_"+disease+"_ae_lasso"
+    directory = str(lr) + '_' + str(wd)
+    parent_dir = "../../results/models_"+disease+"_ae"
     path = os.path.join(parent_dir, directory)
     os.makedirs(path, exist_ok=True)
 
@@ -98,28 +100,17 @@ def work(p):
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
-    if not USE_GPU:
-<<<<<<< HEAD
+    # use parallel=True if you want to grid search hyperparameters
+    if parallel:
         pool = torch.multiprocessing.Pool(10)
         param = [(batch, epochs, lr, wd) for lr in LR for wd in WEIGHT_DECAY]
         pool.map(work, param)
         pool.close()
-    # else:
-    # for lr in LR:
-    #     for wd in WEIGHT_DECAY:
-    #         p = (batch, epochs, lr, wd)
-    #         work(p)
-=======
-        for lr in LR:
-            for wd in WEIGHT_DECAY:
-                p = (batch, epochs, lr, wd)
-                work(p)
     else:
         for lr in LR:
             for wd in WEIGHT_DECAY:
                 p = (batch, epochs, lr, wd)
                 work(p)
->>>>>>> refs/remotes/origin/main
 
 
 if __name__ == "__main__":
@@ -130,7 +121,4 @@ if __name__ == "__main__":
     if unknown:
         raise ValueError(f'Unkown args: {unknown}')
     parser.add_argument('gpu' if torch.cuda.is_available() else "cpu", type=str, help='Whether to use GPU')
-    # parser.add_argument('num_of_clusters', type=int, help='A required integer argument')
-    # parser.add_argument('temperature', type=float, help='A required float argument')
-    # parser.add_argument('method', type=str, help='Choose variational or hyperbolic')
     main(args)
