@@ -45,14 +45,6 @@ def train(num_of_clusters, # for Blie version
         loss = loss_function(params)
         optimizer.zero_grad()  # reset optimizer
         loss.backward()  # backpropagation to speard the loss back to the network
-        # print('alpha_view_1 grad:')
-        # print(model.hid2alpha_specific1.weight.grad)
-        # print(model.hid2alpha_specific1.bias.grad)
-        # print('******')
-        # print('layer1_view_1 grad:')
-        # print(model.specific1_l1.weight.grad)
-        # print(model.specific1_l1.bias.grad)
-        #optimizer.extrapolation() #ExtraAdam
         optimizer.step()  # updating params
 
         total += len(train_data)
