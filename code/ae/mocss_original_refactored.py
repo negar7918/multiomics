@@ -96,6 +96,7 @@ class SharedAndSpecificLoss(nn.Module):
         l1_loss3 = self.l1_loss(specific3_output)
         l1_loss_all = l1_loss1 + l1_loss2 + l1_loss3
 
+        # uncomment l1_loss_all and add it below to use MOCSS (AE) lasso version
         loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all #+ l1_loss_all
 
         return loss_total
@@ -266,9 +267,9 @@ def main(args):
     loss_min2 = min(ls2, key=lambda x: x['loss'])
     folder2 = loss_min2['config']
     all_params = {
-        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
         'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'vae': '0.0003_0.0007'},
         'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
     folder2 = all_params[disease]['ae']
     model_path = os.path.join(path2, folder2)
@@ -376,11 +377,7 @@ def main(args):
 
     else:
 
-        #util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        #util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
-        #util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
-        #util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
+        util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
         km = KMeans(n_clusters=num_clust, random_state=42)
         y_pred = km.fit_predict(final_embedding)
         nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
@@ -388,8 +385,6 @@ def main(args):
                                'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
 
         util.plot_sim(final_embedding, model_path + "/em_sim.png", "Embedding")
-
-        # for brca: util.plot_umap_seq(view1_specific_em_new.detach().numpy(), final_embedding, label, model_path, "/samples60to90.png", method)
 
         X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
         knn = KNeighborsClassifier(n_neighbors=num_clust)
@@ -403,7 +398,6 @@ def main(args):
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
 
-        #util.visualize_final_embedding(final_embedding[:,:32], dir=model_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Method Running')
