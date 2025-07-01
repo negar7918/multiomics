@@ -125,33 +125,33 @@ def plot_corr(data, label, path, method):
     plt.close()
 
 def plot_with_path(data, label, path, method):
-    print(path)
-    tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
-    tsne_results = tsne.fit_transform(data)
-    df = pd.DataFrame(columns=['tsne-2d-one', 'tsne-2d-two'])
-    df['tsne-2d-one'] = tsne_results[:, 0]
-    df['tsne-2d-two'] = tsne_results[:, 1]
-
-    g1 = sns.scatterplot(
-        x="tsne-2d-one", y="tsne-2d-two",
-        hue=label,
-        palette=sns.color_palette("hls", len(np.unique(label))),
-        data=df,
-        legend="full",
-        alpha=0.7
-    )
-    if 'brca' in path:
-        for t, l in zip(g1.legend_.texts, ["Normal-like", "Basal-like", "HER2-enriched", "Luminal A", "Luminal B"]):
-            t.set_text(l)
-    elif 'coad' in path:
-        for t, l in zip(g1.legend_.texts, ["type I", "type II", "type III", "type IV"]):
-            t.set_text(l)
-    elif 'lihc' or 'kirc' in path:
-        for t, l in zip(g1.legend_.texts, ["type I", "type II"]):
-            t.set_text(l)
-    plt.title("t-SNE on "+method, fontsize=20)
-    plt.savefig(path+'_tsne.png')
-    plt.close()
+    # print(path)
+    # tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
+    # tsne_results = tsne.fit_transform(data)
+    # df = pd.DataFrame(columns=['tsne-2d-one', 'tsne-2d-two'])
+    # df['tsne-2d-one'] = tsne_results[:, 0]
+    # df['tsne-2d-two'] = tsne_results[:, 1]
+    #
+    # g1 = sns.scatterplot(
+    #     x="tsne-2d-one", y="tsne-2d-two",
+    #     hue=label,
+    #     palette=sns.color_palette("hls", len(np.unique(label))),
+    #     data=df,
+    #     legend="full",
+    #     alpha=0.7
+    # )
+    # if 'brca' in path:
+    #     for t, l in zip(g1.legend_.texts, ["Normal-like", "Basal-like", "HER2-enriched", "Luminal A", "Luminal B"]):
+    #         t.set_text(l)
+    # elif 'coad' in path:
+    #     for t, l in zip(g1.legend_.texts, ["type I", "type II", "type III", "type IV"]):
+    #         t.set_text(l)
+    # elif 'lihc' or 'kirc' in path:
+    #     for t, l in zip(g1.legend_.texts, ["type I", "type II"]):
+    #         t.set_text(l)
+    # plt.title("t-SNE on "+method, fontsize=20)
+    # plt.savefig(path+'_tsne.png')
+    # plt.close()
 
     embedding = umap.UMAP(random_state=42).fit_transform(data)
     df = pd.DataFrame(columns=['umap-2d-one', 'umap-2d-two'])

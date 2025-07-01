@@ -9,25 +9,14 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-disease = 'kirc'
+disease = 'brca'
 EPOCHS = 100
-<<<<<<< HEAD
-LR = [.0005] #[.0003, .0002, .0001, .0004, .0005, .0006] # .0007
+LR = [.0003] #[.0003, .0002, .0001, .0004, .0005, .0006, .0007] #
 n_groups = [4] #[2, 3, 4, 5]
-=======
-LR = {'kirc': [.0003],  'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
-n_groups = {'kirc': [4],  'coad': [5], 'lihc':[4]}[disease]
->>>>>>> refs/remotes/origin/main
 BATCH_SIZE = 32
 USE_GPU = False
-ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
-MODEL = "standard"
-<<<<<<< HEAD
-WEIGHT_DECAY = [7e-4] #[5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
-=======
-WEIGHT_DECAY = {'kirc': [.0005],  'coad': [0.0003], 'lihc':[0.0007]}[disease]
->>>>>>> refs/remotes/origin/main
-#Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
+parallel = False
+WEIGHT_DECAY = [5e-4] #[5e-4, 4e-4, 3e-4, 6e-4, 7e-4]
 SEED = 21
 
 
@@ -96,48 +85,31 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
-    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
-    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
-    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
-    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
-    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
-    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
+    np.save('{}/train_data_{}'.format(path, disease), X_train)
+    np.save('{}/train_label_{}'.format(path, disease), y_train)
+    np.save('{}/val_data_{}'.format(path, disease), X_val)
+    np.save('{}/val_label_{}'.format(path, disease), y_val)
+    np.save('{}/test_data_{}'.format(path, disease), X_test)
+    np.save('{}/test_label_{}'.format(path, disease), y_test)
+    np.save('{}/loss'.format(path, disease), loss_best)
+
 
 
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
-<<<<<<< HEAD
-    # if not USE_GPU:
-    #     pool = torch.multiprocessing.Pool(10)
-    #     param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
-    #     pool.map(work, param)
-    #     pool.close()
-    #else:
-    for lr in LR:
-        for wd in WEIGHT_DECAY:
-            for n_g in n_groups:
-                p = (batch, epochs, lr, wd, n_g)
-                work(p)
-=======
-    if not USE_GPU:
-        #pool = torch.multiprocessing.Pool(1)
-        #param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
-        #pool.map(work, param)
-        #pool.close()
-        for lr in LR:
-            for wd in WEIGHT_DECAY:
-                for n_g in n_groups:
-                    p = (batch, epochs, lr, wd, n_g)
-                    work(p)
+    if parallel:
+        pool = torch.multiprocessing.Pool(10)
+        param = [(batch, epochs, lr, wd, n_g) for lr in LR for wd in WEIGHT_DECAY for n_g in n_groups]
+        pool.map(work, param)
+        pool.close()
     else:
         for lr in LR:
             for wd in WEIGHT_DECAY:
                 for n_g in n_groups:
                     p = (batch, epochs, lr, wd, n_g)
                     work(p)
->>>>>>> refs/remotes/origin/main
+
 
 
 if __name__ == "__main__":
@@ -150,7 +122,4 @@ if __name__ == "__main__":
     if unknown:
         raise ValueError(f'Unkown args: {unknown}')
     parser.add_argument('gpu' if torch.cuda.is_available() else "cpu", type=str, help='Whether to use GPU')
-    # parser.add_argument('num_of_clusters', type=int, help='A required integer argument')
-    # parser.add_argument('temperature', type=float, help='A required float argument')
-    # parser.add_argument('method', type=str, help='Choose variational or hyperbolic')
     main(args)

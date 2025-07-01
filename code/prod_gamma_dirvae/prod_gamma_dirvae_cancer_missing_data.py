@@ -1,8 +1,6 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from pandas import DataFrame
 from multiomics.code.loading_data import load_data
-from multiomics.code.prod_gamma_dirvae import prodDirVae
+import prodDirVae
 from torch import nn
 import torch.nn.functional as F
 import torch.optim
@@ -15,8 +13,10 @@ import multiomics.code.evaluation as evaluation
 import argparse
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 import warnings
+
 warnings.filterwarnings("ignore")
 
 
@@ -33,17 +33,6 @@ class SharedAndSpecificLoss(nn.Module):
     def __init__(self, K):
         super(SharedAndSpecificLoss, self).__init__()
         self.num_of_clusters = K
-
-    @staticmethod
-    def orthogonal_loss(shared, specific):
-        shared = shared - shared.mean()
-        specific = specific - specific.mean()
-        shared = F.normalize(shared, p=2, dim=1)
-        specific = F.normalize(specific, p=2, dim=1)
-        # This is not inner product but they use it because the get better result
-        correlation_matrix = torch.mul(shared, specific)
-        cost = correlation_matrix.mean()
-        return cost
 
     @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
@@ -128,8 +117,6 @@ class SharedAndSpecificEmbedding(nn.Module):
         self.layers.add_module('specific3_l3_KxL', nn.Linear(K * n_units_3[3], n_units_3[2]))
 
         self.method = method
-
-
 
         units = {'1': n_units_1, '2': n_units_2, '3': n_units_3}
         # This dictionary is used to store NN-lineartransformations,
@@ -266,11 +253,105 @@ class SharedAndSpecificEmbedding(nn.Module):
                view2_shared_rec, view3_specific_rec, view3_shared_rec, view1_shared_mlp, view2_shared_mlp, view3_shared_mlp
 
 
+def reconst_features(original_values_1, original_values_2, original_values_3, recon_values_1, recon_values_2, recon_values_3, path):
+    original_values = np.concatenate((original_values_1, original_values_2, original_values_3), axis=1)
+    recon_values = np.concatenate((recon_values_1, recon_values_2, recon_values_3), axis=1)
+    # Compute distance from x = y line
+    distance = np.abs(original_values - recon_values)
+    # Set a threshold for "closeness"
+    threshold = 0.05
+    close_mask = distance < threshold
+    #
+    # # Highlight points close to x = y
+    # plt.scatter(original_values_3[close_mask], recon_values_3[close_mask], s=2)
+    # # Add x=y reference line
+    # plt.plot([0, 1], [0, 1], 'k--', label='x = y')
+
+    # Find coordinates where mask is True
+    close_coords = np.argwhere(close_mask)
+
+    # Randomly sample a subset of those coordinates
+    num_points_to_plot = 300  # adjust as needed
+    if len(close_coords) > num_points_to_plot:
+        sampled_indices = np.random.choice(len(close_coords), num_points_to_plot, replace=False)
+        sampled_coords = close_coords[sampled_indices]
+    else:
+        sampled_coords = close_coords
+
+    # Extract corresponding values
+    x_vals = original_values[sampled_coords[:, 0], sampled_coords[:, 1]]
+    y_vals = recon_values[sampled_coords[:, 0], sampled_coords[:, 1]]
+
+    # Plot
+    correlation = np.corrcoef(x_vals, y_vals)[0, 1]
+    # Regression line (least squares fit)
+    slope, intercept = np.polyfit(x_vals, y_vals, 1)
+    regression_line = np.polyval([slope, intercept], x_vals)
+    plt.scatter(x_vals, y_vals, alpha=.5, s=10, c='black', label=f'corr = {correlation:.2f}')
+    plt.plot([x_vals.min(), x_vals.max()], [x_vals.min(), x_vals.max()], c='red', label='x = y')
+    # Plot the regression line
+    plt.plot(x_vals, regression_line, 'r-', label=f'Regression Line', c='blue', alpha=.5)
+
+    plt.xlabel("Original Values")
+    plt.ylabel("Reconstructed Values")
+    plt.title("Reconstruction of random features using ProdGamDirVae")
+    plt.legend()
+    plt.savefig(path + '/recon_random.png')
+
+
+def reconst_miRNA(view3_test_data, view3_specific_rec_new, path):
+    original_values_3 = view3_test_data.detach().numpy()
+    recon_values_3 = view3_specific_rec_new.detach().numpy()
+    # plt.scatter(original_values_3, recon_values_3, alpha=0.6)
+
+    # # Compute distance from x = y line
+    distance = np.abs(original_values_3 - recon_values_3)
+    # Set a threshold for "closeness"
+    threshold = 0.05
+    close_mask = distance < threshold
+    #
+    # # Highlight points close to x = y
+    # plt.scatter(original_values_3[close_mask], recon_values_3[close_mask], s=2)
+    # # Add x=y reference line
+    # plt.plot([0, 1], [0, 1], 'k--', label='x = y')
+
+    # Find coordinates where mask is True
+    close_coords = np.argwhere(close_mask)
+
+    # Randomly sample a subset of those coordinates
+    num_points_to_plot = 300  # adjust as needed
+    if len(close_coords) > num_points_to_plot:
+        sampled_indices = np.random.choice(len(close_coords), num_points_to_plot, replace=False)
+        sampled_coords = close_coords[sampled_indices]
+    else:
+        sampled_coords = close_coords
+
+    # Extract corresponding values
+    x_vals = original_values_3[sampled_coords[:, 0], sampled_coords[:, 1]]
+    y_vals = recon_values_3[sampled_coords[:, 0], sampled_coords[:, 1]]
+
+    # Plot
+    correlation = np.corrcoef(x_vals, y_vals)[0, 1]
+    # Regression line (least squares fit)
+    slope, intercept = np.polyfit(x_vals, y_vals, 1)
+    regression_line = np.polyval([slope, intercept], x_vals)
+    plt.scatter(x_vals, y_vals, alpha=.5, s=10, c='black', label=f'corr = {correlation:.2f}')
+    plt.plot([x_vals.min(), x_vals.max()], [x_vals.min(), x_vals.max()], c='red', label='x = y')
+    # Plot the regression line
+    plt.plot(x_vals, regression_line, 'r-', label=f'Regression Line', c='blue', alpha=.5)
+
+    plt.xlabel("Original Values")
+    plt.ylabel("Reconstructed Values")
+    plt.title("Reconstruction of miRNA using ProdGamDirVae")
+    plt.legend()
+    plt.savefig(path + '/recon_miRNA.png')
+
+
 def main(args):
     method = "ProdGamDirVae"
-    disease = 'brca'
+    disease = 'kirc'
     USE_GPU = False
-    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
+    num_clust = 2
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -293,10 +374,10 @@ def main(args):
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
     s = int(folder[-1]) # the number of groups
     model = SharedAndSpecificEmbedding(
-        method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
-        n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
-        n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
-    )
+            method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+            n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
+            n_units_3=[256, 128, 64, 8], mlp_size=[32,8])
+
     if USE_GPU:
         model = model.cuda()
     model.load_state_dict(torch.load(desired_path + '/model_{}'.format(disease)))
@@ -304,7 +385,7 @@ def main(args):
 
     print(folder)
 
-    setup_seed(2)
+    setup_seed(2)  # 2: 66%, 50%
 
     # get the result
     view1_test_data = data[:, :view1_data.shape[1]]
@@ -314,15 +395,40 @@ def main(args):
     view3_test_data = data[:, view1_data.shape[1] + view2_data.shape[1]:]
     view3_test_data = torch.tensor(view3_test_data, dtype=torch.float32).clone().detach()
 
+    # Introduce missing values
+    view1_test_data_missing = view1_test_data.clone()
+    view2_test_data_missing = view2_test_data.clone()
+    view3_test_data_missing = view3_test_data.clone()
+    missing_features_1 = [2, 6, 100, 120, 137]
+    missing_features_2 = [1, 403, 509, 600, 699]
+    missing_features_3 = [1, 10, 21, 35, 200]
+    # Set missing values to zero
+    view1_test_data_missing[:, missing_features_1] = 0
+    view2_test_data_missing[:, missing_features_2] = 0
+    # view3_test_data_missing[:, :] = 0 full omic removal
+    view3_test_data_missing[:, missing_features_3] = 0
+
     view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
         view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
         view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
         view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data)
+        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data_missing)
     view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
     final_embedding = torch.cat(
         (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
     final_embedding = final_embedding.detach().numpy()
+
+    # 1. removal of one omic
+    reconst_miRNA(view3_test_data, view3_specific_rec_new, desired_path)
+
+    # 2. removal of random features
+    # original_values_1 = view1_test_data[:, missing_features_1].detach().numpy()
+    # recon_values_1 = view1_specific_rec_new[:, missing_features_1].detach().numpy()
+    # original_values_2 = view2_test_data[:, missing_features_2].detach().numpy()
+    # recon_values_2 = view2_specific_rec_new[:, missing_features_2].detach().numpy()
+    # original_values_3 = view3_test_data[:, missing_features_3].detach().numpy()
+    # recon_values_3 = view3_specific_rec_new[:, missing_features_3].detach().numpy()
+    # reconst_features(original_values_1, original_values_2, original_values_3, recon_values_1, recon_values_2, recon_values_3, desired_path)
 
     if disease == 'coad':
         truth = label.flatten().astype('int')
@@ -333,7 +439,10 @@ def main(args):
         truth_stage = [mapping[val] for val in lst]
         truth_class = label[:,1].flatten().astype('int')
     elif disease == 'kirc':
-        truth = label[:, 1].flatten().astype('int')
+        lst = label[:, 1:]
+        lst[lst == '1'] = 1
+        lst[lst == '0'] = 0
+        truth = lst.flatten().astype('int')
     else:
         truth = label.flatten()
 
@@ -371,6 +480,7 @@ def main(args):
 
         util.plot_with_path(data, truth_stage, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
+        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
         util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_mRNA_em", method)
         util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_DNAMeth_em", method)
         util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_miRNA_em", method)
@@ -401,6 +511,7 @@ def main(args):
     else:
         util.plot_with_path(data, truth, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
+        #util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
         util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, desired_path + "/_mRNA_em", method)
         util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, desired_path + "/_DNAMeth_em", method)
         util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, desired_path + "/_miRNA_em", method)
@@ -431,6 +542,7 @@ def main(args):
 
         accuracy = accuracy_score(y_test, y_pred)
         print(f"kNN acc: {accuracy:.2f}")
+
 
 
 if __name__ == "__main__":
