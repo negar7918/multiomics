@@ -14,10 +14,9 @@ EPOCHS = 100
 LR  = {'kirc': [.0001],  'coad': [0.0001], 'lihc':[0.0003]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
-ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
+parallel = False
 MODEL = "standard"
 WEIGHT_DECAY  = {'kirc': [.0006],  'coad': [0.0006], 'lihc':[0.0006]}[disease]
-#Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
 
@@ -89,23 +88,24 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
-    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
-    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
-    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
-    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
-    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
-    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
+    np.save('{}/train_data_{}'.format(path, disease), X_train)
+    np.save('{}/train_label_{}'.format(path, disease), y_train)
+    np.save('{}/val_data_{}'.format(path, disease), X_val)
+    np.save('{}/val_label_{}'.format(path, disease), y_val)
+    np.save('{}/test_data_{}'.format(path, disease), X_test)
+    np.save('{}/test_label_{}'.format(path, disease), y_test)
+    np.save('{}/loss'.format(path, disease), loss_best)
 
 
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
-    if not USE_GPU:
-        for lr in LR:
-            for wd in WEIGHT_DECAY:
-                p = (batch, epochs, lr, wd)
-                work(p)
+    # use parallel=True if you want to grid search hyperparameters
+    if parallel:
+        pool = torch.multiprocessing.Pool(10)
+        param = [(batch, epochs, lr, wd) for lr in LR for wd in WEIGHT_DECAY]
+        pool.map(work, param)
+        pool.close()
     else:
         for lr in LR:
             for wd in WEIGHT_DECAY:

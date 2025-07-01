@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 
 
 disease = 'kirc' #'brca' 'coad' 'lihc'
-EPOCHS = 2
+EPOCHS = 100
 LR = {'kirc': [.0002],  'coad': [0.0002], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU =  False
