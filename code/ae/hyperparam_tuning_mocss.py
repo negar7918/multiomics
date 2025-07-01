@@ -16,6 +16,7 @@ LR = {'kirc': [.0002],  'coad': [0.0002], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU =  False
 parallel = False
+lasso = False
 WEIGHT_DECAY = {'kirc': [.0007],  'coad': [0.0007], 'lihc':[0.0007]}[disease]
 SEED = 21
 
@@ -46,7 +47,10 @@ def work(p):
 
     # creating directory to save each model
     directory = str(lr) + '_' + str(wd)
-    parent_dir = "../../results/models_"+disease+"_ae"
+    if lasso == True:
+        parent_dir = "../../results/models_" + disease + "_lassoAE"
+    else:
+        parent_dir = "../../results/models_"+disease+"_ae"
     path = os.path.join(parent_dir, directory)
     os.makedirs(path, exist_ok=True)
 

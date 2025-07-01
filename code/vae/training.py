@@ -38,7 +38,7 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
                   view1_specific_mu, view1_specific_sigma, view2_specific_mu, view2_specific_sigma,
                   view3_specific_mu, view3_specific_sigma, temperature, view1_shared_em.shape[0])
 
-        loss = loss_function(params)
+        loss, kl = loss_function(params)
         optimizer.zero_grad()  # reset optimizer
         loss.backward()  # backpropagation to speard the loss back to the network
         optimizer.step()  # updating params
@@ -53,6 +53,7 @@ def train(train_loader, view1_data, view2_data, model, loss_function, temperatur
 def validation(val_loader, view1_data, view2_data, model, temperature, loss_function, USE_GPU, epoch, total_epochs):
     total_loss = 0.0
     total = 0.0
+    total_loss_KL = 0.0
     for iteration_index, val_batch in enumerate(val_loader):
         val_data = val_batch
         view1_val_data = val_data[:, :view1_data.shape[1]]
@@ -86,12 +87,16 @@ def validation(val_loader, view1_data, view2_data, model, temperature, loss_func
                   view1_specific_mu, view1_specific_sigma, view2_specific_mu, view2_specific_sigma,
                   view3_specific_mu, view3_specific_sigma, temperature, view1_shared_em.shape[0])
 
-        loss = loss_function(params)
+        loss, KL = loss_function(params)
         total += len(val_data)
         total_loss += loss.item()
+        total_loss_KL += KL.item()
 
     res = total_loss / total
     print('[Epoch: %3d/%3d] Validation Loss: %f' % (epoch + 1, total_epochs, res))
+
+    res_kl = total_loss_KL / total
+    print('[Epoch: %3d/%3d] KL Validation Loss: %f' % (epoch + 1, total_epochs, res_kl))
     return res
 
 

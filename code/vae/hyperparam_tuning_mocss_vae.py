@@ -14,10 +14,8 @@ EPOCHS = 100
 LR = {'kirc': [.0003],  'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
 BATCH_SIZE = 32
 USE_GPU = False
-ADJ_PARAMETER = 10 # TODO: adjust it for the dataset
-MODEL = "standard"
+parallel = False
 WEIGHT_DECAY =  {'kirc': [.0007],  'coad': [0.0006], 'lihc':[0.0007]}[disease]
-#Beta = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 2] is it really necessary? BetaVAE
 SEED = 21
 
 
@@ -64,7 +62,7 @@ def work(p):
     loss_function = SharedAndSpecificLoss()
 
 
-    for epoch in range(100):
+    for epoch in range(epochs):
         # train
         train(train_loader, view1_data, view2_data, model, loss_function, temperature, optimizer, epoch, USE_GPU, epochs)
 
@@ -85,20 +83,20 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
-    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
-    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
-    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
-    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
-    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
-    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
+    np.save('{}/train_data_{}'.format(path, disease), X_train)
+    np.save('{}/train_label_{}'.format(path, disease), y_train)
+    np.save('{}/val_data_{}'.format(path, disease), X_val)
+    np.save('{}/val_label_{}'.format(path, disease), y_val)
+    np.save('{}/test_data_{}'.format(path, disease), X_test)
+    np.save('{}/test_label_{}'.format(path, disease), y_test)
+    np.save('{}/loss'.format(path, disease), loss_best)
 
 
 def main(args):
     batch = args.batch_size
     epochs = args.epochs
-    if not USE_GPU:
-        pool = torch.multiprocessing.Pool(1)
+    if parallel:
+        pool = torch.multiprocessing.Pool(10)
         param = [(batch, epochs, lr, wd) for lr in LR for wd in WEIGHT_DECAY]
         pool.map(work, param)
         pool.close()
@@ -113,13 +111,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Hyperparameter Tuning')
     parser.add_argument("--epochs", type=int, help='The number of epochs to train', default=EPOCHS)
     parser.add_argument("--batch-size", type=int, help='Batch-size', default=BATCH_SIZE)
-    #parser.add_argument("--no-parallel", type=bool, help="Do not use cpu parallelism", default=True)
 
     args, unknown = parser.parse_known_args()
     if unknown:
         raise ValueError(f'Unkown args: {unknown}')
     parser.add_argument('gpu' if USE_GPU else "cpu", type=str, help='Whether to use GPU')
-    # parser.add_argument('num_of_clusters', type=int, help='A required integer argument')
-    # parser.add_argument('temperature', type=float, help='A required float argument')
-    # parser.add_argument('method', type=str, help='Choose variational or hyperbolic')
     main(args)

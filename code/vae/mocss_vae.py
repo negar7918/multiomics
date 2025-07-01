@@ -275,8 +275,8 @@ def main(args):
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
     desired_path = os.path.join(path, folder)
-    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
-    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
+    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
     print(folder)
 
@@ -410,7 +410,6 @@ def main(args):
         print(f"kNN acc: {accuracy:.2f}")
     else:
         util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
         util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
         util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
         util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)

@@ -15,6 +15,7 @@ from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
 
+lasso = False
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -96,8 +97,10 @@ class SharedAndSpecificLoss(nn.Module):
         l1_loss3 = self.l1_loss(specific3_output)
         l1_loss_all = l1_loss1 + l1_loss2 + l1_loss3
 
-        # uncomment l1_loss_all and add it below to use MOCSS (AE) lasso version
-        loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all #+ l1_loss_all
+        if lasso:
+            loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all + l1_loss_all
+        else:
+            loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all
 
         return loss_total
 
@@ -254,7 +257,10 @@ def main(args):
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]
-    path2 = ('../../results/models_'+disease+'_ae')
+    if lasso == True:
+        path2 = "../../results/models_" + disease + "_lassoAE"
+    else:
+        path2 = "../../results/models_"+disease+"_ae"
     import os
     for (dir_path, dir_names, file_names) in os.walk(path2):
         for config in dir_names:
