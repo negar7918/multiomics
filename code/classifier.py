@@ -2,16 +2,8 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
-import numpy as np
-from loading_data import load_data
-from torch import nn
-import util
 import math
-import torch.nn.functional as F
 import torch.optim
-import torch.nn.init as init
-from contrastive_loss import InstanceLoss
-import argparse
 from sklearn.cluster import KMeans
 import evaluation as evaluation
 from sklearn.neighbors import KNeighborsClassifier
@@ -24,19 +16,16 @@ from ae.mocss_original_refactored import SharedAndSpecificEmbedding as SASEae
 from prod_gamma_dirvae.prod_gamma_dirvae_cancer import SharedAndSpecificEmbedding as SASEpgdv
 from gamma_dirvae.gamma_dirvae_cancer import SharedAndSpecificEmbedding as SASEgdv
 from Laplace_dirvae.lap_dirvae_cancer import SharedAndSpecificEmbedding as SASElap
-from sklearn.linear_model import LogisticRegression
-import matplotlib.pyplot as plt
 import itertools
-#from neurhci.uhci import UHCI
-#from neurhci.hierarchical import HCI2layers
-#from neurhci.marginal_utilities import MonotonicSelector, MarginalUtilitiesLayer, IdentityClipped, Identity
-import xgboost
 import os
-
+import numpy as np
+import matplotlib.pyplot as plt
 device = 'cpu'
 POSITION = 0
 OMICS_NAMES = ['mRNA', 'DNA', 'miRNA', 'Shared']
 
+path = "./results"
+os.makedirs(path, exist_ok=True)
 
 #%%
 def setup_seed(seed):
@@ -78,10 +67,36 @@ def get_data(name_model, disease):
                 }[name_model]
     model_embedding = model_sas.to(device)
     path_all = f'../results/{disease}/'
-    model_embedding.load_state_dict(torch.load(path_all+f'model_{disease}_{name_model}', weights_only=False))
-    path = f'../../data/data_test' +'/'
-    X_whole_test = np.load(os.path.join(path, f'test_data_{disease}.npy'), allow_pickle=True)
-    all_labels = np.load(os.path.join(path, f'test_label_{disease}.npy'), allow_pickle=True)
+    #model_embedding.load_state_dict(torch.load(path_all+f'model_{disease}_{name_model}', weights_only=False))
+
+    ls2 = [{'loss': 100000000, 'config': 'test'}]
+    path2 = ('../results/models_'+disease+ '_'+name_model)
+    for (dir_path, dir_names, file_names) in os.walk(path2):
+        for config in dir_names:
+            name = os.path.join(config, 'loss.npy')
+            f = os.path.join(path2, name)
+            if os.path.exists(f):
+                l = np.load(f)
+                dict = {'loss': l, 'config': config}
+                ls2 = np.append(ls2, dict)
+    loss_min2 = min(ls2, key=lambda x: x['loss'])
+    folder2 = loss_min2['config']
+    #### comment the below if you want to use the min val_loss but then you need to change model name for path2
+    all_params = {
+        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+        'kirc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+    folder2 = all_params[disease][name_model]
+    ####
+    model_path = os.path.join(path2, folder2)
+    model_embedding.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
+    model_embedding.eval()
+
+
+    #path = f'../data/data_test' +'/'
+    X_whole_test = np.load(os.path.join(model_path, f'test_data_{disease}.npy'), allow_pickle=True)
+    all_labels = np.load(os.path.join(model_path, f'test_label_{disease}.npy'), allow_pickle=True)
     if disease == 'brca':
         y_whole_test = all_labels.flatten()
     elif disease == 'lihc':
@@ -221,7 +236,7 @@ def shapley_size_4_dirty(score_dict):
             
 #%%
 def all_ablations(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, name_model, disease):
-    log_file = f'results/logs_{disease}.txt'
+    log_file = f'../results/logs_{disease}.txt'
     scores = []
     score_dict = {():0.}
     nmi_dict = {(): 0.}
