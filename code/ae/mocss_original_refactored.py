@@ -247,8 +247,8 @@ def main(args):
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
     desired_path = os.path.join(path, folder)
-    data = np.load(f'../../results/data_{disease}' + '/test_data_{}.npy'.format(disease))
-    label = np.load(f'../../results/data_{disease}' + '/test_label_{}.npy'.format(disease), allow_pickle=True)
+    data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
+    label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
 
     print(folder)
 
@@ -269,7 +269,7 @@ def main(args):
     all_params = {
         'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
         'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-        'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'vae': '0.0003_0.0007'},
+        'kirc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'vae': '0.0003_0.0007'},
         'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
     folder2 = all_params[disease]['ae']
     model_path = os.path.join(path2, folder2)

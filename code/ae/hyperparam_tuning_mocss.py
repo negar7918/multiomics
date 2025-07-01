@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 
 
 disease = 'kirc' #'brca' 'coad' 'lihc'
-EPOCHS = 100
+EPOCHS = 2
 LR = {'kirc': [.0002],  'coad': [0.0002], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU =  False
@@ -88,14 +88,13 @@ def work(p):
     torch.save(model.state_dict(), model_path)
     # the below is needed for later reading the file where we don't know the epoch in the file-name as above
     torch.save(model.state_dict(), '{}/model_{}'.format(path, disease))
-    np.save('{}/train_data_{}'.format(f'../../results/data_{disease}', disease), X_train)
-    np.save('{}/train_label_{}'.format(f'../../results/data_{disease}', disease), y_train)
-    np.save('{}/val_data_{}'.format(f'../../results/data_{disease}', disease), X_val)
-    np.save('{}/val_label_{}'.format(f'../../results/data_{disease}', disease), y_val)
-    np.save('{}/test_data_{}'.format(f'../../results/data_{disease}', disease), X_test)
-    np.save('{}/test_label_{}'.format(f'../../results/data_{disease}', disease), y_test)
-    np.save('{}/loss'.format(f'../../results/data_{disease}'), loss_best)
-
+    np.save('{}/train_data_{}'.format(path, disease), X_train)
+    np.save('{}/train_label_{}'.format(path, disease), y_train)
+    np.save('{}/val_data_{}'.format(path, disease), X_val)
+    np.save('{}/val_label_{}'.format(path, disease), y_val)
+    np.save('{}/test_data_{}'.format(path, disease), X_test)
+    np.save('{}/test_label_{}'.format(path, disease), y_test)
+    np.save('{}/loss'.format(path, disease), loss_best)
 
 def main(args):
     batch = args.batch_size
