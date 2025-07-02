@@ -1,8 +1,6 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from pandas import DataFrame
 from multiomics.code.loading_data import load_data
-from multiomics.code.prod_gamma_dirvae import prodDirVae
+import prodDirVae
 from torch import nn
 import torch.nn.functional as F
 import torch.optim
@@ -15,8 +13,10 @@ import multiomics.code.evaluation as evaluation
 import argparse
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 import warnings
+
 warnings.filterwarnings("ignore")
 
 
@@ -33,17 +33,6 @@ class SharedAndSpecificLoss(nn.Module):
     def __init__(self, K):
         super(SharedAndSpecificLoss, self).__init__()
         self.num_of_clusters = K
-
-    @staticmethod
-    def orthogonal_loss(shared, specific):
-        shared = shared - shared.mean()
-        specific = specific - specific.mean()
-        shared = F.normalize(shared, p=2, dim=1)
-        specific = F.normalize(specific, p=2, dim=1)
-        # This is not inner product but they use it because the get better result
-        correlation_matrix = torch.mul(shared, specific)
-        cost = correlation_matrix.mean()
-        return cost
 
     @staticmethod
     def contrastive_loss(shared_1, shared_2, temperature, batch_size):
@@ -128,8 +117,6 @@ class SharedAndSpecificEmbedding(nn.Module):
         self.layers.add_module('specific3_l3_KxL', nn.Linear(K * n_units_3[3], n_units_3[2]))
 
         self.method = method
-
-
 
         units = {'1': n_units_1, '2': n_units_2, '3': n_units_3}
         # This dictionary is used to store NN-lineartransformations,
@@ -266,11 +253,52 @@ class SharedAndSpecificEmbedding(nn.Module):
                view2_shared_rec, view3_specific_rec, view3_shared_rec, view1_shared_mlp, view2_shared_mlp, view3_shared_mlp
 
 
+def reconst_miRNA(view3_test_data, view3_specific_rec_new, path):
+    original_values_3 = view3_test_data.detach().numpy()
+    recon_values_3 = view3_specific_rec_new.detach().numpy()
+
+    # # Compute distance from x = y line
+    distance = np.abs(original_values_3 - recon_values_3)
+    # Set a threshold for "closeness"
+    threshold = 0.05
+    close_mask = distance < threshold
+
+    # Find coordinates where mask is True
+    close_coords = np.argwhere(close_mask)
+
+    # Randomly sample a subset of those coordinates
+    num_points_to_plot = 300  # adjust as needed
+    if len(close_coords) > num_points_to_plot:
+        sampled_indices = np.random.choice(len(close_coords), num_points_to_plot, replace=False)
+        sampled_coords = close_coords[sampled_indices]
+    else:
+        sampled_coords = close_coords
+
+    # Extract corresponding values
+    x_vals = original_values_3[sampled_coords[:, 0], sampled_coords[:, 1]]
+    y_vals = recon_values_3[sampled_coords[:, 0], sampled_coords[:, 1]]
+
+    # Plot
+    correlation = np.corrcoef(x_vals, y_vals)[0, 1]
+    # Regression line (least squares fit)
+    slope, intercept = np.polyfit(x_vals, y_vals, 1)
+    regression_line = np.polyval([slope, intercept], x_vals)
+    plt.scatter(x_vals, y_vals, alpha=.5, s=10, c='black', label=f'corr = {correlation:.2f}')
+    plt.plot([x_vals.min(), x_vals.max()], [x_vals.min(), x_vals.max()], c='red', label='x = y')
+    # Plot the regression line
+    plt.plot(x_vals, regression_line, 'r-', label=f'Regression Line', c='blue', alpha=.5)
+
+    plt.xlabel("Original Values")
+    plt.ylabel("Reconstructed Values")
+    plt.title("Reconstruction of miRNA using ProdGamDirVae")
+    plt.legend()
+    plt.savefig(path + '/recon_miRNA.png')
+
+
 def main(args):
     method = "ProdGamDirVae"
     disease = 'brca'
     USE_GPU = False
-    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -293,10 +321,10 @@ def main(args):
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
     s = int(folder[-1]) # the number of groups
     model = SharedAndSpecificEmbedding(
-        method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
-        n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
-        n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
-    )
+            method, s, view_size=[view1_data.shape[1], view2_data.shape[1], view3_data.shape[1]],
+            n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
+            n_units_3=[256, 128, 64, 8], mlp_size=[32,8])
+
     if USE_GPU:
         model = model.cuda()
     model.load_state_dict(torch.load(desired_path + '/model_{}'.format(disease)))
@@ -304,9 +332,11 @@ def main(args):
 
     print(folder)
 
+    print('\n The name of the folder, that is under the directory name "models_brca_ProdGammaDirVae", for the reconstruction plot is "{0}".'.format(folder))
+
     setup_seed(2)
 
-    # get the result
+    # get the data
     view1_test_data = data[:, :view1_data.shape[1]]
     view1_test_data = torch.tensor(view1_test_data, dtype=torch.float32).clone().detach()
     view2_test_data = data[:, view1_data.shape[1]:view1_data.shape[1] + view2_data.shape[1]]
@@ -314,113 +344,17 @@ def main(args):
     view3_test_data = data[:, view1_data.shape[1] + view2_data.shape[1]:]
     view3_test_data = torch.tensor(view3_test_data, dtype=torch.float32).clone().detach()
 
+    # Introduce missing values
+    view3_test_data_missing = view3_test_data.clone()
+    view3_test_data_missing[:, :] = 0
+
     view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
         view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
         view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
         view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data)
-    view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
-    final_embedding = torch.cat(
-        (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
-    final_embedding = final_embedding.detach().numpy()
+        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data_missing)
 
-    if disease == 'coad':
-        truth = label.flatten().astype('int')
-    elif disease == 'lihc':
-        lst = label[:,0].flatten()
-        unique_vals = list(set(lst))  # Find unique values
-        mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
-        truth_stage = [mapping[val] for val in lst]
-        truth_class = label[:,1].flatten().astype('int')
-    elif disease == 'kirc':
-        truth = label[:, 1].flatten().astype('int')
-    else:
-        truth = label.flatten()
-
-    if disease == 'lihc':
-        util.plot_with_path(data, truth_class, desired_path + "/data", method)
-        util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
-        best_inertia = float("inf")
-        best_labels = None
-        for i in range(30):
-            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-            labels = kmeans.fit_predict(final_embedding)
-            if kmeans.inertia_ < best_inertia:
-                best_inertia = kmeans.inertia_
-                best_labels = labels
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth_class, best_labels)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth_class, test_size=0.25, random_state=12)
-
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
-
-        util.plot_with_path(data, truth_stage, desired_path + "/data", method)
-        util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
-        best_inertia = float("inf")
-        best_labels = None
-        for i in range(30):
-            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-            labels = kmeans.fit_predict(final_embedding)
-            if kmeans.inertia_ < best_inertia:
-                best_inertia = kmeans.inertia_
-                best_labels = labels
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(np.asarray(truth_stage), best_labels)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, np.asarray(truth_stage), test_size=0.25, random_state=12)
-
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
-    else:
-        util.plot_with_path(data, truth, desired_path + "/data", method)
-        util.plot_with_path(final_embedding, truth, desired_path + "/final_em", method)
-        best_inertia = float("inf")
-        best_labels = None
-        for i in range(30):
-            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-            labels = kmeans.fit_predict(final_embedding)
-            if kmeans.inertia_ < best_inertia:
-                best_inertia = kmeans.inertia_
-                best_labels = labels
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, best_labels)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        util.plot_sim(data, desired_path+ "/raw_data_sim.png", "Raw Data")
-        util.plot_sim(final_embedding, desired_path+ "/em_sim.png", "Embedding")
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
-
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
+    reconst_miRNA(view3_test_data, view3_specific_rec_new, desired_path)
 
 
 if __name__ == "__main__":

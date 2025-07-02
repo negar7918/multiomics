@@ -111,7 +111,6 @@ def main(args):
                     work(p)
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Hyperparameter Tuning')
     parser.add_argument("--epochs", type=int, help='The number of epochs to train', default=EPOCHS)
