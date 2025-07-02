@@ -9,14 +9,14 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-disease = 'kirc'
+disease = 'brca'
 EPOCHS = 100
-LR  = {'kirc': [.0001],  'coad': [0.0001], 'lihc':[0.0003]}[disease]
+LR  = {'brca': [.0003], 'kirc': [.0001], 'coad': [0.0001], 'lihc':[0.0003]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
 parallel = False
 MODEL = "standard"
-WEIGHT_DECAY  = {'kirc': [.0006],  'coad': [0.0006], 'lihc':[0.0006]}[disease]
+WEIGHT_DECAY  = {'brca': [.0007], 'kirc': [.0006],  'coad': [0.0006], 'lihc':[0.0006]}[disease]
 SEED = 21
 
 

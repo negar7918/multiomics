@@ -219,7 +219,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 
 def main(args):
-    disease = 'kirc'
+    disease = 'brca'
     n_clusters = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
     method = "GammaDirVae"
     USE_GPU = False
@@ -237,7 +237,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_GammaDirVae')
+    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:
@@ -248,7 +248,16 @@ def main(args):
                 dict = {'loss': l, 'config': config}
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
-    folder = loss_min['config']
+    all_params = {
+        'brca': {'vae': '0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007',
+                 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006', 'lapdirvae': '0.0002_0.0005',
+                 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+        'kirc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006', 'lapdirvae': '0.0002_0.0005',
+                 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006', 'lapdirvae': '0.0001_0.0006',
+                 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+    folder = all_params[disease]['ProdGammaDirVae'] #loss_min['config']
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
@@ -267,11 +276,6 @@ def main(args):
                 ls2 = np.append(ls2, dict)
     loss_min2 = min(ls2, key=lambda x: x['loss'])
     folder2 = loss_min2['config']
-    all_params = {
-        'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
-        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-        'kirc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
-        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
     folder2 = all_params[disease]['GammaDirVae']
     model_path = os.path.join(path2, folder2)
     desired_path = model_path
