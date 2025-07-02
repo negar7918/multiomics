@@ -10,14 +10,14 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-disease = 'kirc' #'brca' 'coad' 'lihc'
+disease = 'brca' #'kirc' 'coad' 'lihc'
 EPOCHS = 100
-LR = {'kirc': [.0002],  'coad': [0.0002], 'lihc':[0.0002]}[disease]
+LR = {'brca': [.0004], 'kirc': [.0002], 'coad': [0.0002], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU =  False
 parallel = False
 lasso = False
-WEIGHT_DECAY = {'kirc': [.0007],  'coad': [0.0007], 'lihc':[0.0007]}[disease]
+WEIGHT_DECAY = {'brca': [.0007], 'kirc': [.0007],  'coad': [0.0007], 'lihc':[0.0007]}[disease]
 SEED = 21
 
 # use the blew instead (for LR and WEIGHT_DECAY) if you want to search over hyperparameters

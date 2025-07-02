@@ -11,11 +11,11 @@ from sklearn.cluster import KMeans
 import multiomics.code.evaluation as evaluation
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
 
-lasso = False
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -63,11 +63,6 @@ class SharedAndSpecificLoss(nn.Module):
         loss = torch.linalg.matrix_norm(rec-ori)
         return loss
 
-    @staticmethod
-    def l1_loss(em):
-        l1_batch = torch.norm(em, 1, dim=1)
-        return l1_batch.mean()
-
     def forward(self, params):
         (shared1_output, shared2_output, shared3_output, specific1_output, specific2_output, specific3_output,
         shared1_rec, shared2_rec, shared3_rec, specific1_rec, specific2_rec, specific3_rec, ori1, ori2, ori3,
@@ -91,16 +86,7 @@ class SharedAndSpecificLoss(nn.Module):
         reconst_loss3 = self.reconstruction_loss(shared3_rec, ori3) + self.reconstruction_loss(specific3_rec, ori3)
         reconstruction_loss_all = reconst_loss1 + reconst_loss2 + reconst_loss3
 
-        # lasso loss
-        l1_loss1 = self.l1_loss(specific1_output)
-        l1_loss2 = self.l1_loss(specific2_output)
-        l1_loss3 = self.l1_loss(specific3_output)
-        l1_loss_all = l1_loss1 + l1_loss2 + l1_loss3
-
-        if lasso:
-            loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all + l1_loss_all
-        else:
-            loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all
+        loss_total = orthogonal_loss_all + contrastive_loss_all + .7 * reconstruction_loss_all
 
         return loss_total
 
@@ -220,12 +206,49 @@ class SharedAndSpecificEmbedding(nn.Module):
                view3_specific_rec, view3_shared_rec, view1_shared_mlp, view2_shared_mlp, view3_shared_mlp
 
 
+def reconst_features(original_values_1, original_values_2, original_values_3, recon_values_1, recon_values_2, recon_values_3, path):
+    original_values = np.concatenate((original_values_1, original_values_2, original_values_3), axis=1)
+    recon_values = np.concatenate((recon_values_1, recon_values_2, recon_values_3), axis=1)
+    # Compute distance from x = y line
+    distance = np.abs(original_values - recon_values)
+    # Set a threshold for "closeness"
+    threshold = 0.05
+    close_mask = distance < threshold
+
+    # Find coordinates where mask is True
+    close_coords = np.argwhere(close_mask)
+
+    # Randomly sample a subset of those coordinates
+    num_points_to_plot = 300  # adjust as needed
+    if len(close_coords) > num_points_to_plot:
+        sampled_indices = np.random.choice(len(close_coords), num_points_to_plot, replace=False)
+        sampled_coords = close_coords[sampled_indices]
+    else:
+        sampled_coords = close_coords
+
+    # Extract corresponding values
+    x_vals = original_values[sampled_coords[:, 0], sampled_coords[:, 1]]
+    y_vals = recon_values[sampled_coords[:, 0], sampled_coords[:, 1]]
+
+    # Plot
+    correlation = np.corrcoef(x_vals, y_vals)[0, 1]
+    # Regression line (least squares fit)
+    slope, intercept = np.polyfit(x_vals, y_vals, 1)
+    regression_line = np.polyval([slope, intercept], x_vals)
+    plt.scatter(x_vals, y_vals, alpha=.5, s=10, c='black', label=f'corr = {correlation:.2f}')
+    plt.plot([x_vals.min(), x_vals.max()], [x_vals.min(), x_vals.max()], c='red', label='x = y')
+    # Plot the regression line
+    plt.plot(x_vals, regression_line, 'r-', label=f'Regression Line', c='blue', alpha=.5)
+
+    plt.xlabel("Original Values")
+    plt.ylabel("Reconstructed Values")
+    plt.title("Reconstruction of random features using MOCSS (AE)")
+    plt.legend()
+    plt.savefig(path + '/recon_random.png')
+
+
 def main(args):
-    method = "AutoEncoder"
     disease = 'brca' #'kirc' 'coad' 'lihc'
-    num_clust = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
-
-
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
     # Build Model
@@ -267,10 +290,7 @@ def main(args):
 
     # Load model
     ls2 = [{'loss': 100000000, 'config': 'test'}]
-    if lasso == True:
-        path2 = "../../results/models_" + disease + "_lassoAE"
-    else:
-        path2 = "../../results/models_"+disease+"_ae"
+    path2 = ('../../results/models_'+disease+'_ae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path2):
         for config in dir_names:
@@ -284,15 +304,14 @@ def main(args):
     folder2 = loss_min2['config']
     folder2 = all_params[disease]['ae']
     model_path = os.path.join(path2, folder2)
-    desired_path = model_path    
     model.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
     model.eval()
 
-    print(folder2)
+    print('\n The name of the folder, that is under the directory name "models_brca_ae", for the reconstruction plot is "{0}".'.format(folder2))
 
     setup_seed(2)
 
-    # get the result
+    # get the data
     view1_test_data = data[:, :view1_data.shape[1]]
     view1_test_data = torch.tensor(view1_test_data, dtype=torch.float32).clone().detach()
     view2_test_data = data[:, view1_data.shape[1]:view1_data.shape[1] + view2_data.shape[1]]
@@ -300,104 +319,32 @@ def main(args):
     view3_test_data = data[:, view1_data.shape[1] + view2_data.shape[1]:]
     view3_test_data = torch.tensor(view3_test_data, dtype=torch.float32).clone().detach()
 
+    # Introduce random missing values
+    view1_test_data_missing = view1_test_data.clone()
+    view2_test_data_missing = view2_test_data.clone()
+    view3_test_data_missing = view3_test_data.clone()
+    missing_features_1 = [2, 6, 100, 120, 137]
+    missing_features_2 = [1, 403, 509, 600, 699]
+    missing_features_3 = [1, 10, 21, 35, 200]
+    # Set missing values to zero
+    view1_test_data_missing[:, missing_features_1] = 0
+    view2_test_data_missing[:, missing_features_2] = 0
+    view3_test_data_missing[:, missing_features_3] = 0
+
     view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
          view2_shared_em_new, view3_specific_em_new,  \
         view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
         view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
-        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data)
-    view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
-    final_embedding = torch.cat(
-        (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
-    final_embedding = final_embedding.detach().numpy()
+        view3_shared_mlp_new = model(view1_test_data, view2_test_data, view3_test_data_missing)
 
-    if disease == 'coad':
-        truth = label.flatten().astype('int')
-    elif disease == 'lihc':
-        lst = label[:, 0].flatten()
-        unique_vals = list(set(lst))  # Find unique values
-        mapping = {val: idx for idx, val in enumerate(unique_vals)}  # Assign unique numbers
-        truth_stage = [mapping[val] for val in lst]
-        truth_class = label[:, 1].flatten().astype('int')
-    elif disease == 'kirc':
-        truth = label[:, 1].flatten().astype('int')
-    else:
-        truth = label.flatten()
+    original_values_1 = view1_test_data[:, missing_features_1].detach().numpy()
+    recon_values_1 = view1_specific_rec_new[:, missing_features_1].detach().numpy()
+    original_values_2 = view2_test_data[:, missing_features_2].detach().numpy()
+    recon_values_2 = view2_specific_rec_new[:, missing_features_2].detach().numpy()
+    original_values_3 = view3_test_data[:, missing_features_3].detach().numpy()
+    recon_values_3 = view3_specific_rec_new[:, missing_features_3].detach().numpy()
 
-    if disease == 'lihc':
-        util.plot_with_path(data, truth_class, desired_path + "/data", method)
-        util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
-        best_inertia = float("inf")
-        best_labels = None
-        for i in range(30):
-            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-            labels = kmeans.fit_predict(final_embedding)
-            if kmeans.inertia_ < best_inertia:
-                best_inertia = kmeans.inertia_
-                best_labels = labels
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth_class, best_labels)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth_class, test_size=0.25, random_state=12)
-
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
-
-        util.plot_with_path(data, truth_stage, desired_path + "/data", method)
-        util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
-        best_inertia = float("inf")
-        best_labels = None
-        for i in range(30):
-            kmeans = KMeans(n_clusters=num_clust, init='k-means++', random_state=i)
-            labels = kmeans.fit_predict(final_embedding)
-            if kmeans.inertia_ < best_inertia:
-                best_inertia = kmeans.inertia_
-                best_labels = labels
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(np.asarray(truth_stage), best_labels)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, np.asarray(truth_stage), test_size=0.25, random_state=12)
-
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
-
-    else:
-
-        util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-        km = KMeans(n_clusters=num_clust, random_state=42)
-        y_pred = km.fit_predict(final_embedding)
-        nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)
-        print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
-                               'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
-
-        X_train, X_test, y_train, y_test = train_test_split(final_embedding, truth, test_size=0.25, random_state=12)
-        knn = KNeighborsClassifier(n_neighbors=num_clust)
-
-        # Train the model
-        knn.fit(X_train, y_train)
-
-        # Predict on test set
-        y_pred = knn.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"kNN acc: {accuracy:.2f}")
+    reconst_features(original_values_1, original_values_2, original_values_3, recon_values_1, recon_values_2, recon_values_3, model_path)
 
 
 if __name__ == "__main__":
