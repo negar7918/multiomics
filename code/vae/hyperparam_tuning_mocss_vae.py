@@ -9,13 +9,13 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-disease = 'kirc'
+disease = 'brca'
 EPOCHS = 100
-LR = {'kirc': [.0003],  'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
+LR = {'brca': [.0006], 'kirc': [.0003], 'coad': [0.0002], 'lihc':[0.0005]}[disease] # .0007
 BATCH_SIZE = 32
 USE_GPU = False
 parallel = False
-WEIGHT_DECAY =  {'kirc': [.0007],  'coad': [0.0006], 'lihc':[0.0007]}[disease]
+WEIGHT_DECAY =  {'brca': [.0004], 'kirc': [.0007],  'coad': [0.0006], 'lihc':[0.0007]}[disease]
 SEED = 21
 
 
@@ -34,7 +34,6 @@ def work(p):
         n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
         n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
     )
-
 
     if USE_GPU:
         model = model.cuda()
