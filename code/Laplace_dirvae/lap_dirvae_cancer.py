@@ -287,7 +287,7 @@ class SharedAndSpecificEmbedding(nn.Module):
 
 def main(args):
     method = "LapDirVae"
-    disease = 'kirc'
+    disease = 'brca'
     num_clust = {'lihc': 2, 'coad': 4, 'kirc':2, 'brca':5}[disease]
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
@@ -300,7 +300,7 @@ def main(args):
 
     # Load test data
     ls = [{'loss': 100000000, 'config': 'test'}]
-    path = ('../../results/models_'+disease+'_lapdirvae')
+    path = ('../../results/models_'+disease+'_ProdGammaDirVae')
     import os
     for (dir_path, dir_names, file_names) in os.walk(path):
         for config in dir_names:
@@ -312,6 +312,16 @@ def main(args):
                 ls = np.append(ls, dict)
     loss_min = min(ls, key=lambda x: x['loss'])
     folder = loss_min['config']
+    all_params = {
+        'brca': {'vae': '0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4', 'ae': '0.0004_0.0007',
+                 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
+        'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006', 'lapdirvae': '0.0002_0.0005',
+                 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
+        'kirc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006', 'lapdirvae': '0.0002_0.0005',
+                 'ProdGammaDirVae': '0.0003_0.0005_4', 'vae': '0.0003_0.0007'},
+        'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006', 'lapdirvae': '0.0001_0.0006',
+                 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
+    folder = all_params[disease]['ProdGammaDirVae']
     desired_path = os.path.join(path, folder)
     data = np.load(desired_path + '/test_data_{}.npy'.format(disease))
     label = np.load(desired_path + '/test_label_{}.npy'.format(disease), allow_pickle=True)
@@ -330,12 +340,7 @@ def main(args):
                 ls2 = np.append(ls2, dict)
     loss_min2 = min(ls2, key=lambda x: x['loss'])
     folder2 = loss_min2['config']
-    # all_params = {
-    #     'brca': {'vae':'0.0006_0.0004', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'ae': '0.0004_0.0007', 'GammaDirVae': '0.0003_0.0007', 'lapdirvae': '0.0006_0.0007'},
-    #     'lihc': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0003_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0005_0.0007_4', 'vae': '0.0005_0.0007'},
-    #     'kric': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0002_0.0005', 'ProdGammaDirVae': '0.0003_0.0005_4_softmax', 'vae': '0.0003_0.0007'},
-    #     'coad': {'ae': '0.0002_0.0007', 'GammaDirVae': '0.0001_0.0006',  'lapdirvae': '0.0001_0.0006', 'ProdGammaDirVae': '0.0002_0.0003_5', 'vae': '0.0002_0.0006'}}
-    # folder2 = all_params[disease]['lapdirvae']
+    folder2 = all_params[disease]['lapdirvae']
     model_path = os.path.join(path2, folder2)
     desired_path = model_path
     model.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
@@ -387,10 +392,6 @@ def main(args):
     if disease == 'lihc':
         util.plot_with_path(data, truth_class, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth_class, desired_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_class, desired_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_class, desired_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_class, desired_path + "/_miRNA_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -419,9 +420,6 @@ def main(args):
 
         util.plot_with_path(data, truth_stage, desired_path + "/data", method)
         util.plot_with_path(final_embedding, truth_stage, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth_stage, desired_path + "/_miRNA_em", method)
         best_inertia = float("inf")
         best_labels = None
         for i in range(30):
@@ -449,10 +447,6 @@ def main(args):
         print(f"kNN acc: {accuracy:.2f}")
     else:
         util.plot_with_path(final_embedding, truth, model_path + "/final_em", method)
-        # util.plot_corr(final_embedding, truth, desired_path + "/final_em", method)
-        util.plot_with_path(view1_specific_em_new.detach().numpy(), truth, model_path + "/_mRNA_em", method)
-        util.plot_with_path(view2_specific_em_new.detach().numpy(), truth, model_path + "/_DNAMeth_em", method)
-        util.plot_with_path(view3_specific_em_new.detach().numpy(), truth, model_path + "/_miRNA_em", method)
         km = KMeans(n_clusters=num_clust, random_state=42)
         y_pred = km.fit_predict(final_embedding)
         nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(truth, y_pred)

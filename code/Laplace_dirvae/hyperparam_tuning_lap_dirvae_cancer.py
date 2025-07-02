@@ -9,13 +9,13 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-disease = 'kirc'
+disease = 'brca'
 EPOCHS = 100
-LR = {'kirc': [.0002],  'coad': [0.0001], 'lihc':[0.0002]}[disease]
+LR = {'brca': [.0006], 'kirc': [.0002], 'coad': [0.0001], 'lihc':[0.0002]}[disease]
 BATCH_SIZE = 32
 USE_GPU = False
 parallel = False
-WEIGHT_DECAY = {'kirc': [.0005],  'coad': [0.0006], 'lihc':[0.0005]}[disease]
+WEIGHT_DECAY = {'brca': [.0007], 'kirc': [.0005],  'coad': [0.0006], 'lihc':[0.0005]}[disease]
 SEED = 21
 
 def work(p):
@@ -26,7 +26,6 @@ def work(p):
     early_stopper = EarlyStopper(patience=30, min_delta=10)
     n_clusters = 2
     temperature = 0.4
-    method = "lap_dirvae"
 
     view1_data, view2_data, view3_data, view_train_concatenate, y_true = load_data(disease)
 
@@ -34,7 +33,6 @@ def work(p):
         n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
         n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
     )
-
 
     if USE_GPU:
         model = model.cuda()
