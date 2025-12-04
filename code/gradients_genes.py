@@ -1,0 +1,393 @@
+#%%
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+import math
+import torch.optim
+from sklearn.cluster import KMeans
+import evaluation as evaluation
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import warnings
+warnings.filterwarnings("ignore")
+from vae.mocss_vae import SharedAndSpecificEmbedding as SASEvae
+from ae.mocss_original_refactored import SharedAndSpecificEmbedding as SASEae
+from prod_gamma_dirvae.prod_gamma_dirvae_cancer import SharedAndSpecificEmbedding as SASEpgdv
+from gamma_dirvae.gamma_dirvae_cancer import SharedAndSpecificEmbedding as SASEgdv
+from Laplace_dirvae.lap_dirvae_cancer import SharedAndSpecificEmbedding as SASElap
+import itertools
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+device = 'cpu'
+POSITION = 0
+OMICS_NAMES = ['mRNA', 'DNA', 'miRNA', 'Shared']
+
+path = "./results"
+os.makedirs(path, exist_ok=True)
+
+#%%
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+
+setup_seed(2)
+
+#%%
+def get_data(name_model, disease):
+    omics_shape = {'brca': [1000,1000,503], 'kirc': [58315, 22928, 1879], 'lihc': [20530, 5000, 1046], 'coad': [17260, 19052, 375]}[disease]
+    group_numbers = {'brca': 4, 'coad': 5, 'lihc':4, 'kirc': 4}[disease]
+    model_sas = {'vae': SASEvae(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'ae':SASEae(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'ProdGamDirVae':SASEpgdv(
+                    "ProdGamDirVae", K=group_numbers, view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 8], n_units_2=[512, 256, 128, 8],
+                    n_units_3=[256, 128, 64, 8], mlp_size=[32, 8]
+                ), 
+                'GammaDirVae':SASEgdv(
+                    view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                ), 
+                'lapdirvae': SASElap(view_size=[omics_shape[0], omics_shape[1], omics_shape[2]],
+                    n_units_1=[512, 256, 128, 32], n_units_2=[512, 256, 128, 32],
+                    n_units_3=[256, 128, 64, 32], mlp_size=[32, 8]
+                )
+                }[name_model]
+    model_embedding = model_sas.to(device)
+    #model_embedding.load_state_dict(torch.load(path_all+f'model_{disease}_{name_model}', weights_only=False))
+
+    ls2 = [{'loss': 100000000, 'config': 'test'}]
+    model_path = ('results/models/'+name_model)
+    for (dir_path, dir_names, file_names) in os.walk(model_path):
+        for config in dir_names:
+            name = os.path.join(config, 'loss.npy')
+            f = os.path.join(model_path, name)
+            if os.path.exists(f):
+                l = np.load(f)
+                dict = {'loss': l, 'config': config}
+                ls2 = np.append(ls2, dict)
+    loss_min2 = min(ls2, key=lambda x: x['loss'])
+    model_embedding.load_state_dict(torch.load(model_path + '/model_{}'.format(disease)))
+    model_embedding.eval()
+
+
+    #path = f'../data/data_test' +'/'
+    X_whole_test = np.load(os.path.join(model_path, f'test_data_{disease}.npy'), allow_pickle=True)
+    all_labels = np.load(os.path.join(model_path, f'test_label_{disease}.npy'), allow_pickle=True)
+    if disease == 'brca':
+        y_whole_test = all_labels.flatten()
+    elif disease == 'lihc':
+        all_labels_str = all_labels[:,-1]
+        y_whole_test = np.array([len(k)-1 for k in all_labels_str])
+    elif disease == 'kirc':
+        y_whole_test = all_labels[:,1].astype(int)
+    else:
+        y_whole_test = all_labels
+    X_subtrain, X_subtest, y_subtrain, y_subtest = train_test_split(X_whole_test, y_whole_test, test_size=0.25, random_state=12)
+
+    X_whole_test_omics = torch.from_numpy(X_whole_test.astype(float)).float().to(device)
+    Y_whole_test = y_whole_test.astype(int)
+    X_subtest_omics = torch.from_numpy(X_subtest.astype(float)).float().to(device)
+    Y_subtest = y_subtest.astype(int)
+    X_subtrain_omics = torch.from_numpy(X_subtrain.astype(float)).float().to(device)
+    Y_subtrain = y_subtrain.astype(int)
+
+    Xs = []
+    with torch.no_grad():
+        for X_loader in [X_subtrain_omics, X_subtest_omics, X_whole_test_omics]:
+            if name_model == 'vae':
+                (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
+                view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
+                view3_specific_em_new, view3_specific_mu_new, view3_specific_sigma_new, view3_shared_em_new,
+                view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new,
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new,
+                view1_shared_mlp_new, view2_shared_mlp_new, view3_shared_mlp_new) = (
+                    model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:]))
+            elif name_model == 'ae':
+                view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_shared_em_new, view3_specific_em_new,  \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'GammaDirVae':
+                view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'ProdGamDirVae':
+                view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
+                view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            elif name_model == 'lapdirvae':
+                view1_specific_em_new, view1_specific_mu_new, view1_specific_sig_new, view1_shared_em_new, view2_specific_em_new, \
+                view2_specific_mu_new, view2_specific_sig_new, view2_shared_em_new, view3_specific_em_new, view3_specific_mu_new, \
+                view3_specific_sig_new, view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+                view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+                view3_shared_mlp_new = model_embedding(X_loader[:,:omics_shape[0]], 
+                    X_loader[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+                    X_loader[:,omics_shape[0]+omics_shape[1]:])
+            view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
+            final_embedding = torch.cat(
+                (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
+            out_shapes = [view1_specific_em_new.shape[1], view2_specific_em_new.shape[1], view3_specific_em_new.shape[1], view_shared_common.shape[1]]
+            final_embedding = final_embedding
+            print(final_embedding.shape)
+            Xs.append(final_embedding.detach().numpy())
+
+    return X_subtrain, Y_subtrain, Xs[0], X_subtest, Y_subtest, Xs[1], X_whole_test, Y_whole_test, Xs[2], out_shapes, model_embedding, X_subtrain_omics, X_subtest_omics, X_whole_test_omics, omics_shape
+
+def model_forward(model, x_omics, omics_shape):
+    if isinstance(model, (SASEvae, SASElap)):
+        (view1_specific_em_new, view1_specific_mu_new, view1_specific_sigma_new, view1_shared_em_new,
+        view2_specific_em_new, view2_specific_mu_new, view2_specific_sigma_new, view2_shared_em_new,
+        view3_specific_em_new, view3_specific_mu_new, view3_specific_sigma_new, view3_shared_em_new,
+        view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new,
+        view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new,
+        view1_shared_mlp_new, view2_shared_mlp_new, view3_shared_mlp_new) = (
+            model(x_omics[:,:omics_shape[0]], 
+            x_omics[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+            x_omics[:,omics_shape[0]+omics_shape[1]:]))
+    else:
+        view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
+        view2_shared_em_new, view3_specific_em_new,  \
+        view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
+        view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
+        view3_shared_mlp_new = model(x_omics[:,:omics_shape[0]],                    
+            x_omics[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
+            x_omics[:,omics_shape[0]+omics_shape[1]:])
+    view_shared_common = (view1_shared_em_new + view2_shared_em_new + view3_shared_em_new) / 3
+    final_embedding = torch.cat(
+            (view1_specific_em_new, view2_specific_em_new, view3_specific_em_new, view_shared_common), dim=1)
+    return final_embedding
+
+#%%
+def extract_omics(x, omics):
+    xs = [x[:,:32]*1., x[:,32:64]*1., x[:,64:96]*1., x[:,96:]*1.]
+    return np.concatenate([xs[i] for i in omics], axis=1)
+
+def one_knn(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, disease):
+    nb_classes = {
+            'brca': 5,
+            'lihc': 2,
+            'coad': 4,
+            'kirc': 2}[disease]    
+    best_inertia = float("inf")
+    best_labels = None
+    for i in range(30):
+        kmeans = KMeans(n_clusters=nb_classes, init='k-means++', random_state=i)
+        labels = kmeans.fit_predict(X_whole_test)
+        if kmeans.inertia_ < best_inertia:
+            best_inertia = kmeans.inertia_
+            best_labels = labels
+    nmi_, ari_, f_score_, acc_, v_, ch = evaluation.evaluate(Y_whole_test, best_labels)
+    #print('\n' + ' ' * 8 + '|==>  nmi: %.4f,  ari: %.4f,  f_score: %.4f,  acc: %.4f,  v_measure: %.4f,  '
+    #                        'ch_index: %.4f  <==|' % (nmi_, ari_, f_score_, acc_, v_, ch))
+    
+    knn = KNeighborsClassifier(n_neighbors=nb_classes)
+    # Train the model
+    knn.fit(X_subtrain, Y_subtrain)
+    # Predict on test set
+    y_pred = knn.predict(X_subtest)
+    accuracy = accuracy_score(Y_subtest, y_pred)
+    nearest_neighbors = knn.kneighbors(X_subtest)
+    #print(f"kNN acc: {accuracy:.2f}")
+    return nmi_, accuracy, nearest_neighbors
+
+def gradient_distance(base_example, nearest_neighbors, model, omics_shape):
+    grads = []
+    embeddings_neighbors = model_forward(model, nearest_neighbors, omics_shape)
+    for i in range(nearest_neighbors.shape[0]):
+        embedding_base = model_forward(model, base_example.unsqueeze(0), omics_shape)
+        embedding_neighbor = embeddings_neighbors[i].unsqueeze(0)
+        norm = torch.nn.functional.mse_loss(embedding_base, embedding_neighbor, reduction='mean')
+        grad = torch.autograd.grad(norm, base_example, retain_graph=False)[0]
+        grads.append(grad.detach().cpu().numpy())
+
+    grads = np.array(grads)
+    return grads
+
+def one_exp(disease, name_model):
+    X_train, Y_subtrain, X_subtrain, Y_train, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, model, X_subtrain_omics, X_subtest_omics, X_whole_test_omics, omics_shape = get_data(name_model, disease)
+    nmi, acc, nearest_neighbors = one_knn(X_subtrain, Y_subtrain, X_subtest, Y_subtest, X_whole_test, Y_whole_test, disease)
+    gradient_distances_list = []
+    for i in range(X_subtest_omics.shape[0]):
+        base_example = X_subtest_omics[i].clone().detach().requires_grad_(True)
+        neighbor_indices = nearest_neighbors[1][i]
+        neighbors = X_subtrain_omics[neighbor_indices].clone().detach().requires_grad_(True)
+        grads = gradient_distance(base_example, neighbors, model, omics_shape)
+        gradient_distances_list.append(grads)
+    gradient_distances = np.array(gradient_distances_list)
+    return gradient_distances, nmi, acc
+
+def all_expes(disease):
+    score_dicts = {}
+    for name_model in ['ae', 'vae', 'lapdirvae', 'GammaDirVae', 'ProdGamDirVae']:
+        print(name_model)
+        X_train, Y_subtrain, X_subtrain, Y_train, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, model = get_data(name_model, disease)
+    return model
+
+
+#%%
+shaps_all = {}
+for disease in ['brca']:
+    shaps_all[disease] = all_expes(disease)
+# %%
+def plot_shaps(shaps, name_model):
+    x = np.arange(4)
+    width = 6
+    colors = ['red', 'blue', 'green', 'orange']
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGamDirVae':'OMIDIENT'}[name_model]
+    fig,ax = plt.subplots(figsize=(6,4), dpi=80)
+    x = np.arange(4)
+    width = 6
+    bar_handles = {}
+    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
+        shapley_values = shaps[disease][name_model][0]
+        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
+        for j, bar in enumerate(bars):
+            if OMICS_NAMES[j] not in bar_handles:
+                bar_handles[OMICS_NAMES[j]] = bar
+        ax.text(
+            i * width, 
+            -0.05,  # Negative position moves the text below bars
+            disease, 
+            ha='center', 
+            fontsize=15
+        )
+    #plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value for Accuracy')
+    plt.title(f"{name_model_clean}")
+    ax.set_xticks([])
+    ax.legend(bar_handles.values(), bar_handles.keys())
+    plt.grid()
+    plt.ylim(0, 0.5)
+    plt.savefig(f'results/shapley_acc_{name_model}.pdf')
+    
+    plt.clf()
+
+    fig,ax = plt.subplots(figsize=(6,4), dpi=120)
+    bar_handles = {}
+    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
+        shapley_values = shaps[disease][name_model][1]
+        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
+        for j, bar in enumerate(bars):
+            if OMICS_NAMES[j] not in bar_handles:
+                bar_handles[OMICS_NAMES[j]] = bar
+        ax.text(
+            i * width, 
+            -0.05,  # Negative position moves the text below bars
+            disease, 
+            ha='center', 
+            fontsize=15
+        )
+    #plt.xlabel('Omics Names')
+    plt.ylabel('Shapley Value for NMI')
+    plt.title(f"{name_model_clean}")
+    ax.set_xticks([])
+    ax.legend(bar_handles.values(), bar_handles.keys())
+    plt.grid()
+    plt.savefig(f'results/shapley_nmi_{name_model}.pdf')
+    
+    plt.clf()
+
+plot_shaps(shaps_all, 'ae')
+plot_shaps(shaps_all, 'vae')
+plot_shaps(shaps_all, 'lapdirvae')
+plot_shaps(shaps_all, 'GammaDirVae')
+plot_shaps(shaps_all, 'ProdGamDirVae')
+
+# %%
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# brca, coad, lihc, kirc
+def plot_ablations(shaps_all, name_model):
+    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGamDirVae':'OMIDIENT'}[name_model]
+    n_data = 4
+    vals = []
+    names = []
+    fig = plt.figure(figsize=(6, 6), dpi=80)
+    diseases = ['brca', 'coad', 'lihc', 'kirc']
+    for i,disease in enumerate(diseases):
+        dict_values = shaps_all[disease][name_model][2]
+        for j,(k,v) in enumerate(dict_values.items()):
+            if len(k):
+                if i==0:
+                    names.append(', '.join([OMICS_NAMES[omic_idx] for omic_idx in k]))
+                    vals.append([])
+                vals[j-1].append(v)
+    vals = np.array(vals).T
+    
+    colors_box = ['tab:red' if 'Shared' in n else 'tab:blue' for n in names]
+    rectangles = [('Shared' in n) for n in names]
+
+    markers = ['o', 'x', 's', '*']
+    colors = ['blue', 'orange', 'red', 'green']
+    text_colors = ['red' if r else 'black' for r in rectangles]
+    for i,v in enumerate(vals):
+        plt.plot(range(len(v)), v, label=diseases[i], color=colors[i], marker=markers[i])
+        #for hx,has_rectangle in enumerate(rectangles):
+            #if has_rectangle:
+                #plt.axvspan(hx - 0.4, hx + 0.4, alpha=0.3, edgecolor='red', color='grey')
+    plt.xticks(ticks=np.arange(15), labels=names, rotation=45, ha='right')
+    tick_labels = fig.get_axes()[0].get_xticklabels()
+    for label_idx in range(len(text_colors)):
+        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
+    plt.ylim(0., 1.1)
+    plt.title(f"Ablation Study for {name_model_clean}")
+    plt.ylabel("k-NN Accuracy")
+    plt.tight_layout()
+    plt.legend(loc='lower right')
+    plt.grid()
+    plt.savefig(f'results/ablation_dots{name_model}.pdf')
+    plt.clf()
+
+    # Plot
+    data_titled = {d:vals.T[i] for i,d in enumerate(names)}
+    #return data_titled
+    fig = plt.figure(figsize=(6, 6), dpi=80)
+    sns.boxplot(data=data_titled, palette=colors_box)
+    plt.grid()
+
+    # Only draw a horizontal line at the median for group "B"
+    plt.xticks(rotation=45, ha='right')  # Rotate x labels if needed
+    tick_labels = fig.get_axes()[0].get_xticklabels()
+    for label_idx in range(len(text_colors)):
+        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
+    plt.title(f"Ablation Study for {name_model_clean}")
+    plt.tight_layout()
+    plt.savefig(f'results/ablation_boxplots_{name_model}.pdf')
+    plt.clf()
+    print(name_model_clean)
+#%%
+plot_ablations(shaps_all, 'ae')
+plot_ablations(shaps_all, 'vae')
+plot_ablations(shaps_all, 'lapdirvae')
+plot_ablations(shaps_all, 'GammaDirVae')
+plot_ablations(shaps_all, 'ProdGamDirVae')
+# %%
