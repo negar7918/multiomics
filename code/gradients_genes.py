@@ -311,8 +311,8 @@ list_feat_names = [row[0] for row in list_feat_names]
 index_test_value = 2
 print(Y_subtest[index_test_value])
 print([Y_subtrain[i] for i in nearest_neighbors[1][index_test_value]])
-top_indices = np.argsort(np.abs(gradient_distances[index_test_value]), axis=1)
-top_indices = top_indices[:,:50].tolist()[::-1]
+top_indices_arr = np.argsort(np.abs(gradient_distances[index_test_value]), axis=1)
+top_indices = top_indices_arr[:,-10:].tolist()[::-1]
 all_top_features = []
 for neighbour in range(len(top_indices)):
     top_features = [list_feat_names[i] for i in top_indices[neighbour]]
@@ -322,4 +322,30 @@ for neighbour in range(len(top_indices)):
 
 # %%
 np.sort(counts)
+# %%
+all_all_top_features = []
+for index_test_value in range(nb_examples):
+    print(Y_subtest[index_test_value])
+    print([Y_subtrain[i] for i in nearest_neighbors[1][index_test_value]])
+    top_indices = np.argsort(np.abs(gradient_distances[index_test_value]), axis=1)
+    top_indices = top_indices[:,-10:].tolist()[::-1]
+    all_top_features = []
+    for neighbour in range(len(top_indices)):
+        top_features = [list_feat_names[i] for i in top_indices[neighbour]]
+        all_top_features += (top_features)
+    all_all_top_features += (all_top_features)
+
+# %%
+all_appearing = list(set(all_all_top_features))
+counts = []
+for gene in all_appearing:
+    count = all_all_top_features.count(gene)
+    counts.append(count)
+# %%
+print(np.array(all_appearing)[np.argsort(counts)[-20:]])
+print(np.array(counts)[np.argsort(counts)[-20:]])
+# %%
+relevant_ones = ['hsa-mir-187', 'hsa-mir-20b', 'hsa-mir-204']
+indices_relevant = [all_appearing.index(gene) for gene in relevant_ones]
+counts_relevant = [counts[idx] for idx in indices_relevant]
 # %%
