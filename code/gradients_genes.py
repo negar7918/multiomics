@@ -171,8 +171,8 @@ def model_forward(model, x_omics, omics_shape):
             x_omics[:,omics_shape[0]:omics_shape[0]+omics_shape[1]],
             x_omics[:,omics_shape[0]+omics_shape[1]:]))
     else:
-        view1_specific_em_new, view1_shared_em_new, view2_specific_em_new, \
-        view2_shared_em_new, view3_specific_em_new,  \
+        view1_specific_em_new, view1_specific_alpha_new, view1_shared_em_new, view2_specific_em_new, \
+        view2_specific_alpha_new, view2_shared_em_new, view3_specific_em_new, view3_specific_alpha_new, \
         view3_shared_em_new, view1_specific_rec_new, view1_shared_rec_new, view2_specific_rec_new, \
         view2_shared_rec_new, view3_specific_rec_new, view3_shared_rec_new, view1_shared_mlp_new, view2_shared_mlp_new, \
         view3_shared_mlp_new = model(x_omics[:,:omics_shape[0]],                    
@@ -225,7 +225,6 @@ def gradient_distance(base_example, nearest_neighbors, model, omics_shape):
         norm = torch.nn.functional.mse_loss(embedding_base, embedding_neighbor, reduction='mean')
         grad = torch.autograd.grad(norm, base_example, retain_graph=False)[0]
         grads.append(grad.detach().cpu().numpy())
-
     grads = np.array(grads)
     return grads
 
@@ -240,7 +239,7 @@ def one_exp(disease, name_model):
         grads = gradient_distance(base_example, neighbors, model, omics_shape)
         gradient_distances_list.append(grads)
     gradient_distances = np.array(gradient_distances_list)
-    return gradient_distances, nmi, acc
+    return gradient_distances, nmi, acc, nearest_neighbors
 
 def all_expes(disease):
     score_dicts = {}
@@ -249,145 +248,78 @@ def all_expes(disease):
         X_train, Y_subtrain, X_subtrain, Y_train, Y_subtest, X_subtest, _, Y_whole_test, X_whole_test, out_shapes, model = get_data(name_model, disease)
     return model
 
+# %%
+gradient_distances, nmi, acc, nearest_neighbors = one_exp('brca', 'ProdGamDirVae')
+# %%
+import seaborn as sn
+all_avgs_by_omics = []
+nb_examples = gradient_distances.shape[0]
+for index_test_value in range(nb_examples):
+    print(Y_subtest[index_test_value])
+    print([Y_subtrain[i] for i in nearest_neighbors[1][index_test_value]])
+    #sn.heatmap(np.abs(gradient_distances[index_test_value]), cmap='viridis', vmin=0)
+    #plt.show()
+    split_by_omics = []
+    curr_index = 0
+    for k in omics_shape:
+        split_by_omics.append(gradient_distances[index_test_value][:,curr_index:curr_index+k])
+        curr_index += k
+
+    avgs_by_omics = [np.abs(split_by_omics[i]).mean(1) for i in range(len(split_by_omics))]
+    all_avgs_by_omics.append(np.stack(avgs_by_omics).T*1000)
 
 #%%
-shaps_all = {}
-for disease in ['brca']:
-    shaps_all[disease] = all_expes(disease)
+# Create the grid of subplots
+fig, axes = plt.subplots(9, 5, figsize=(10, 15))
+
+vmax = np.concatenate(all_avgs_by_omics).max()
+
+# Flatten axes for easy iteration
+axes = axes.flatten()
+
+# Keep a reference to one heatmap for the colorbar
+hm = None
+
+class_names = ["Normal-like", "Basal-like", "HER2-enriched", "Luminal A", "Luminal B"]
+
+for index_test_value, ax in enumerate(axes[:len(all_avgs_by_omics)]):
+    ax.set_title(f'Label: {class_names[Y_subtest[index_test_value]]}', fontsize=10)
+    avgs_by_omics = all_avgs_by_omics[index_test_value]
+    hm = sn.heatmap(
+        avgs_by_omics,
+        cmap='inferno',
+        vmin=0,
+        vmax=vmax,
+        yticklabels=False,
+        xticklabels=OMICS_NAMES[:-1] if index_test_value >= 39 else False,
+        cbar=False,
+        ax=ax
+    )
+fig.delaxes(axes[44])
+# Add one big colorbar to the right
+cbar_ax = fig.add_axes([0.25, -0.02, 0.5, 0.02])  # centered below
+fig.colorbar(hm.collections[0], cax=cbar_ax, orientation='horizontal')
+
+plt.tight_layout()
+plt.show()
 # %%
-def plot_shaps(shaps, name_model):
-    x = np.arange(4)
-    width = 6
-    colors = ['red', 'blue', 'green', 'orange']
-    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGamDirVae':'OMIDIENT'}[name_model]
-    fig,ax = plt.subplots(figsize=(6,4), dpi=80)
-    x = np.arange(4)
-    width = 6
-    bar_handles = {}
-    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
-        shapley_values = shaps[disease][name_model][0]
-        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
-        for j, bar in enumerate(bars):
-            if OMICS_NAMES[j] not in bar_handles:
-                bar_handles[OMICS_NAMES[j]] = bar
-        ax.text(
-            i * width, 
-            -0.05,  # Negative position moves the text below bars
-            disease, 
-            ha='center', 
-            fontsize=15
-        )
-    #plt.xlabel('Omics Names')
-    plt.ylabel('Shapley Value for Accuracy')
-    plt.title(f"{name_model_clean}")
-    ax.set_xticks([])
-    ax.legend(bar_handles.values(), bar_handles.keys())
-    plt.grid()
-    plt.ylim(0, 0.5)
-    plt.savefig(f'results/shapley_acc_{name_model}.pdf')
-    
-    plt.clf()
+import csv
 
-    fig,ax = plt.subplots(figsize=(6,4), dpi=120)
-    bar_handles = {}
-    for i,disease in enumerate(['brca', 'coad', 'lihc', 'kirc']):
-        shapley_values = shaps[disease][name_model][1]
-        bars = ax.bar(x-1.5+i*width, shapley_values, color=colors)
-        for j, bar in enumerate(bars):
-            if OMICS_NAMES[j] not in bar_handles:
-                bar_handles[OMICS_NAMES[j]] = bar
-        ax.text(
-            i * width, 
-            -0.05,  # Negative position moves the text below bars
-            disease, 
-            ha='center', 
-            fontsize=15
-        )
-    #plt.xlabel('Omics Names')
-    plt.ylabel('Shapley Value for NMI')
-    plt.title(f"{name_model_clean}")
-    ax.set_xticks([])
-    ax.legend(bar_handles.values(), bar_handles.keys())
-    plt.grid()
-    plt.savefig(f'results/shapley_nmi_{name_model}.pdf')
-    
-    plt.clf()
-
-plot_shaps(shaps_all, 'ae')
-plot_shaps(shaps_all, 'vae')
-plot_shaps(shaps_all, 'lapdirvae')
-plot_shaps(shaps_all, 'GammaDirVae')
-plot_shaps(shaps_all, 'ProdGamDirVae')
+list_feat_names = csv.reader(open('./feat_names.csv', 'r'))
+list_feat_names = [row[0] for row in list_feat_names]
+# %%
+index_test_value = 2
+print(Y_subtest[index_test_value])
+print([Y_subtrain[i] for i in nearest_neighbors[1][index_test_value]])
+top_indices = np.argsort(np.abs(gradient_distances[index_test_value]), axis=1)
+top_indices = top_indices[:,:50].tolist()[::-1]
+all_top_features = []
+for neighbour in range(len(top_indices)):
+    top_features = [list_feat_names[i] for i in top_indices[neighbour]]
+    all_top_features.append(top_features)
 
 # %%
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 
-# brca, coad, lihc, kirc
-def plot_ablations(shaps_all, name_model):
-    name_model_clean = {'ae':'MOCSS (AE)', 'vae':'VAE', 'lapdirvae':'LapDirVae', 'GammaDirVae':'GamDirVae', 'ProdGamDirVae':'OMIDIENT'}[name_model]
-    n_data = 4
-    vals = []
-    names = []
-    fig = plt.figure(figsize=(6, 6), dpi=80)
-    diseases = ['brca', 'coad', 'lihc', 'kirc']
-    for i,disease in enumerate(diseases):
-        dict_values = shaps_all[disease][name_model][2]
-        for j,(k,v) in enumerate(dict_values.items()):
-            if len(k):
-                if i==0:
-                    names.append(', '.join([OMICS_NAMES[omic_idx] for omic_idx in k]))
-                    vals.append([])
-                vals[j-1].append(v)
-    vals = np.array(vals).T
-    
-    colors_box = ['tab:red' if 'Shared' in n else 'tab:blue' for n in names]
-    rectangles = [('Shared' in n) for n in names]
-
-    markers = ['o', 'x', 's', '*']
-    colors = ['blue', 'orange', 'red', 'green']
-    text_colors = ['red' if r else 'black' for r in rectangles]
-    for i,v in enumerate(vals):
-        plt.plot(range(len(v)), v, label=diseases[i], color=colors[i], marker=markers[i])
-        #for hx,has_rectangle in enumerate(rectangles):
-            #if has_rectangle:
-                #plt.axvspan(hx - 0.4, hx + 0.4, alpha=0.3, edgecolor='red', color='grey')
-    plt.xticks(ticks=np.arange(15), labels=names, rotation=45, ha='right')
-    tick_labels = fig.get_axes()[0].get_xticklabels()
-    for label_idx in range(len(text_colors)):
-        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
-    plt.ylim(0., 1.1)
-    plt.title(f"Ablation Study for {name_model_clean}")
-    plt.ylabel("k-NN Accuracy")
-    plt.tight_layout()
-    plt.legend(loc='lower right')
-    plt.grid()
-    plt.savefig(f'results/ablation_dots{name_model}.pdf')
-    plt.clf()
-
-    # Plot
-    data_titled = {d:vals.T[i] for i,d in enumerate(names)}
-    #return data_titled
-    fig = plt.figure(figsize=(6, 6), dpi=80)
-    sns.boxplot(data=data_titled, palette=colors_box)
-    plt.grid()
-
-    # Only draw a horizontal line at the median for group "B"
-    plt.xticks(rotation=45, ha='right')  # Rotate x labels if needed
-    tick_labels = fig.get_axes()[0].get_xticklabels()
-    for label_idx in range(len(text_colors)):
-        tick_labels[label_idx].set_color(text_colors[label_idx])  # Change 'B' to red
-    plt.title(f"Ablation Study for {name_model_clean}")
-    plt.tight_layout()
-    plt.savefig(f'results/ablation_boxplots_{name_model}.pdf')
-    plt.clf()
-    print(name_model_clean)
-#%%
-plot_ablations(shaps_all, 'ae')
-plot_ablations(shaps_all, 'vae')
-plot_ablations(shaps_all, 'lapdirvae')
-plot_ablations(shaps_all, 'GammaDirVae')
-plot_ablations(shaps_all, 'ProdGamDirVae')
+# %%
+np.sort(counts)
 # %%
