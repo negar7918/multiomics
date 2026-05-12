@@ -85,12 +85,21 @@ def auc_sig_tests(X_test, y_test, X_train, y_train, num_clust):
     # Renormalize so each row sums to 1.0
     y_prob_filtered = y_prob_filtered / y_prob_filtered.sum(axis=1, keepdims=True)
 
-    auc_score = roc_auc_score(
-        y_test_filtered,
-        y_prob_filtered,
-        multi_class='ovr',
-        labels=classes_in_both
-    )
+    if num_clust == 2:
+        auc_score = roc_auc_score(
+            y_test_filtered,
+            y_prob_filtered[:, 0],
+            multi_class='ovr',
+            labels=classes_in_both
+        )
+
+    else:
+        auc_score = roc_auc_score(
+            y_test_filtered,
+            y_prob_filtered,
+            multi_class='ovr',
+            labels=classes_in_both
+        )
     print(f"AUC Score: {auc_score:.4f}")
 
     k_values = [3, num_clust, 5, 7, 9]
