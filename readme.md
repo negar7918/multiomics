@@ -1,7 +1,7 @@
 ## Description
 
 This is the implementation of the OMIDIENT paper: **"OMIDIENT: multiOMics Integration for cancer by
-DIrichlet auto-ENcoder neTworks"**
+DIrichlet auto-ENcoder neTworks"** also referred in https://zenodo.org/records/20273710
 
 See code folder for the codes implemented for this paper. 
 The folder code_two_omics is used for when the data modality is two.
